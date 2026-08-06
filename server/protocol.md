@@ -24,5 +24,6 @@ Valid event types: `padHit`, `transport`, `queue`, `loops`, `sample`, `scene`, `
 - `ack`: command acknowledgement with request ID and sequence where relevant
 - `error`: stable error code, message, and request ID where available
 - `pong`: response to `ping`
+- `clock`: periodic authoritative beat position with `beat`, `bpm`, `playing`, and wall-clock `serverTime`; `beat` is measured in quarter-note beats and advances from the server's monotonic clock.
 
 Malformed messages, unsupported versions/types, invalid room codes, duplicate client IDs, invalid roles, and invalid payloads are rejected without terminating the entire server.

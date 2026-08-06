@@ -36,7 +36,7 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
     }
 
     func send(eventType: String, payload: [String: Any]) {
-        sendJSON(["type": "event", "eventType": eventType, "payload": payload])
+        sendJSON(["type": "event", "eventType": eventType, "eventID": UUID().uuidString, "payload": payload])
     }
 
     private func sendJSON(_ object: [String: Any]) {

@@ -17,7 +17,7 @@
 
 ## MC-019 — Add audio-session lifecycle handling
 
-- Priority: P0 · Status: planned · Dependencies: MC-018
+- Priority: P0 · Status: in-progress · Dependencies: MC-018
 - Acceptance: Audio resumes or fails clearly after interruption, route change, phone call, lock, and Bluetooth transition.
 
 ## MC-020 — Implement native WebSocket handshake
@@ -32,7 +32,7 @@
 
 ## MC-022 — Receive and schedule remote events
 
-- Priority: P1 · Status: planned · Dependencies: MC-005, MC-020, MC-025
+- Priority: P1 · Status: in-progress · Dependencies: MC-005, MC-020, MC-025
 - Acceptance: Remote events are deduplicated and scheduled against the clock without blocking local pad input.
 
 ## MC-023 — Add instrument abstraction
@@ -65,12 +65,17 @@
 - Priority: P1 · Status: planned · Dependencies: MC-017, MC-021
 - Acceptance: Automated or repeatable tests cover pad rate, event serialization, reconnect, audio interruption, and memory growth.
 
+## MC-129 — Apply remote instrument and pitch settings
+
+- Priority: P1 · Status: in-progress · Dependencies: MC-022, MC-023
+- Acceptance: iPhone 14 applies companion-selected instrument and bounded pitch settings to subsequent local and remote performance sounds.
+
 ## MC-120 — Enforce landscape-only native orientation
 
-- Priority: P0 · Status: planned · Dependencies: MC-119
+- Priority: P0 · Status: done · Dependencies: MC-119
 - Acceptance: The iPhone 14 app supports landscape orientations only, rejects portrait rotation, and keeps pads, transport, and safe-area content usable in both landscape directions.
 
 ## MC-121 — Add landscape performance layout pass
 
-- Priority: P1 · Status: planned · Dependencies: MC-120, MC-027
+- Priority: P1 · Status: in-progress · Dependencies: MC-120, MC-027
 - Acceptance: Pad grid, instrument controls, transport, connection state, and accessibility labels are laid out for landscape without clipping or unsafe touch targets.

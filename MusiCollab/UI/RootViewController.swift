@@ -7,17 +7,32 @@ final class RootViewController: UIViewController {
     private var isPlaying = false
     private var tempoLabel: UILabel!
     private var connectionLabel: UILabel!
+    private var performanceModeLabel: UILabel!
+    private var beatLabel: UILabel!
     private var sampleTitleLabel: UILabel!
     private var playButton: UIButton!
     private var padButtons: [UIButton] = []
+    private var padHeightConstraints: [NSLayoutConstraint] = []
     private var importedSample: ImportedSample?
     private var sessionTransport: SessionTransport?
+    private var receivedEventIDs = Set<String>()
 
     private let bg = UIColor(red: 0.055, green: 0.065, blue: 0.09, alpha: 1)
     private let panel = UIColor(red: 0.10, green: 0.115, blue: 0.15, alpha: 1)
     private let cyan = UIColor(red: 0.28, green: 0.90, blue: 0.95, alpha: 1)
     private let coral = UIColor(red: 1.0, green: 0.34, blue: 0.34, alpha: 1)
     private let violet = UIColor(red: 0.66, green: 0.45, blue: 1.0, alpha: 1)
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
+    override var shouldAutorotate: Bool { true }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let isLandscape = view.bounds.width > view.bounds.height
+        let padHeight: CGFloat = isLandscape ? 56 : 74
+        padHeightConstraints.forEach { $0.constant = padHeight }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -58,11 +73,17 @@ final class RootViewController: UIViewController {
         title.font = UIFont.systemFont(ofSize: 22, weight: .heavy)
         content.addArrangedSubview(title)
 
-        let sub = UILabel()
-        sub.text = "Shared session  /  A-side"
-        sub.textColor = .lightGray
-        sub.font = UIFont.systemFont(ofSize: 13, weight: .medium)
-        content.addArrangedSubview(sub)
+        performanceModeLabel = UILabel()
+        performanceModeLabel.text = "Shared session  /  DRUMS  /  0 st"
+        performanceModeLabel.textColor = .lightGray
+        performanceModeLabel.font = UIFont.systemFont(ofSize: 13, weight: .medium)
+        content.addArrangedSubview(performanceModeLabel)
+
+        beatLabel = UILabel()
+        beatLabel.text = "BEAT 0.00"
+        beatLabel.textColor = cyan
+        beatLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 16, weight: .bold)
+        content.addArrangedSubview(beatLabel)
 
         let transport = makePanel()
         let transportStack = UIStackView()
@@ -218,7 +239,9 @@ final class RootViewController: UIViewController {
         button.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .bold)
         button.backgroundColor = color
         button.layer.cornerRadius = 12
-        button.heightAnchor.constraint(equalToConstant: 74).isActive = true
+        let height = button.heightAnchor.constraint(equalToConstant: 74)
+        height.isActive = true
+        padHeightConstraints.append(height)
         return button
     }
 
@@ -240,9 +263,42 @@ final class RootViewController: UIViewController {
             self?.connectionLabel.textColor = connected ? self?.cyan : .lightGray
         }
         transport.onMessage = { [weak self] message in
-            guard let self, let eventType = message["eventType"] as? String else { return }
+            guard let self else { return }
+            if message["type"] as? String == "clock" {
+                let beat = message["beat"] as? Double ?? 0
+                DispatchQueue.main.async {
+                    self.beatLabel.text = String(format: "BEAT %.2f", beat)
+                }
+                return
+            }
+            guard message["type"] as? String == "event",
+                  let eventID = message["eventID"] as? String,
+                  !self.receivedEventIDs.contains(eventID) else { return }
+            self.receivedEventIDs.insert(eventID)
+            if self.receivedEventIDs.count > 512, let oldest = self.receivedEventIDs.first {
+                self.receivedEventIDs.remove(oldest)
+            }
+
+            guard message["sender"] as? String != "iphone14",
+                  let eventType = message["eventType"] as? String else { return }
             if eventType == "padHit", let payload = message["payload"] as? [String: Any], let pad = payload["pad"] as? Int {
+                let rawVelocity = (payload["velocity"] as? Double ?? 0.86) * 127
+                let velocity = UInt8(max(1, min(127, Int(rawVelocity))))
+                self.audio.trigger(note: UInt8(36 + pad), velocity: velocity)
                 self.flashPad(pad)
+            } else if eventType == "transport", let payload = message["payload"] as? [String: Any] {
+                if let playing = payload["playing"] as? Bool {
+                    self.isPlaying = playing
+                    self.playButton.setTitle(playing ? "■" : "▶", for: .normal)
+                }
+                if let bpm = payload["bpm"] as? Int {
+                    self.tempo = max(60, min(180, bpm))
+                    self.tempoLabel.text = "\(self.tempo) BPM"
+                }
+            } else if eventType == "instrument", let payload = message["payload"] as? [String: Any], let instrument = payload["instrument"] as? String {
+                let pitch = payload["pitch"] as? Int ?? 0
+                self.audio.setInstrument(instrument, pitchSemitones: pitch)
+                self.performanceModeLabel.text = "Shared session  /  \(instrument.uppercased())  /  \(pitch >= 0 ? "+" : "")\(pitch) st"
             }
         }
         sessionTransport = transport
@@ -297,6 +353,7 @@ final class RootViewController: UIViewController {
         }
         let slices = samples.sliceBoundaries(for: sample, count: 8)
         sampleTitleLabel.text = "\(slices.count) slices ready  /  \(formatDuration(sample.duration))"
+        publishSample(sample, slices: slices)
     }
 }
 
@@ -305,9 +362,21 @@ extension RootViewController: UIDocumentPickerDelegate {
         importedSample = samples.importSample(from: url)
         if let sample = importedSample {
             sampleTitleLabel.text = "\(sample.url.lastPathComponent)  /  \(formatDuration(sample.duration))"
+            publishSample(sample, slices: [])
         } else {
             sampleTitleLabel.text = "Unsupported audio file"
         }
+    }
+
+    private func publishSample(_ sample: ImportedSample, slices: [ClosedRange<Double>]) {
+        let boundaries = slices.map { ["start": $0.lowerBound, "end": $0.upperBound] }
+        sessionTransport?.send(eventType: "sample", payload: [
+            "name": sample.url.lastPathComponent,
+            "duration": sample.duration,
+            "sampleRate": sample.sampleRate,
+            "channels": sample.channelCount,
+            "slices": boundaries
+        ])
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

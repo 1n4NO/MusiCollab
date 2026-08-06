@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import WebSocket from "ws";
-import { heartbeat, httpServer, runHeartbeat } from "../index.js";
+import { clockTimer, heartbeat, httpServer, runHeartbeat } from "../index.js";
 
 const port = await new Promise((resolve) => {
   if (httpServer.address()) return resolve(httpServer.address().port);
@@ -93,5 +93,6 @@ test("heartbeat tolerates two missed checks and terminates on the third", () => 
 
 test.after(async () => {
   clearInterval(heartbeat);
+  clearInterval(clockTimer);
   await new Promise((resolve) => httpServer.close(resolve));
 });

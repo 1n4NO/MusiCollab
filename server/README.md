@@ -22,6 +22,7 @@ The server exposes:
 - Health check: `http://127.0.0.1:8787/health`
 - LAN/session info: `http://127.0.0.1:8787/info`
 - Composer deck: `http://127.0.0.1:8787/composer`
+- iPhone 6 Plus companion: `http://127.0.0.1:8787/companion`
 - WebSocket endpoint: `ws://127.0.0.1:8787/ws`
 
 For phones on the same Wi-Fi network, replace `127.0.0.1` with the Mac's LAN

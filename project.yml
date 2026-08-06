@@ -21,7 +21,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.MusiCollab
         DEVELOPMENT_TEAM: L4Q834S9XV
         CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UIRequiresFullScreen: true
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Connect nearby iPhones for a shared music session."
         INFOPLIST_KEY_UIFileSharingEnabled: true
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: true
@@ -37,4 +39,5 @@ targets:
         UIBackgroundModes:
           - audio
         UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight

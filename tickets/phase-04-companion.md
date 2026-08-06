@@ -2,17 +2,17 @@
 
 ## MC-043 — Companion application shell
 
-- Priority: P0 · Status: planned · Dependencies: MC-011
+- Priority: P0 · Status: done · Dependencies: MC-011
 - Acceptance: A lightweight route loads in iOS 12 Safari with companion-mode labeling and no unsupported blocking APIs.
 
 ## MC-044 — Legacy Safari compatibility baseline
 
-- Priority: P0 · Status: planned · Dependencies: MC-043
+- Priority: P0 · Status: done · Dependencies: MC-043
 - Acceptance: Supported CSS/JS features are documented; the app works at the iPhone 6 Plus viewport and on a slow Wi-Fi connection.
 
 ## MC-045 — Companion WebSocket lifecycle
 
-- Priority: P0 · Status: planned · Dependencies: MC-002, MC-009, MC-043
+- Priority: P0 · Status: in-progress · Dependencies: MC-002, MC-009, MC-043
 - Acceptance: Companion joins as `companion`, shows connecting/connected/reconnecting/offline states, and resumes state without refresh.
 
 ## MC-046 — Room code and QR join
@@ -22,12 +22,12 @@
 
 ## MC-047 — Queue up-next controls
 
-- Priority: P0 · Status: planned · Dependencies: MC-037, MC-045
+- Priority: P0 · Status: in-progress · Dependencies: MC-037, MC-045
 - Acceptance: Companion can add, reorder, remove, and confirm the next track; commands are quantized and acknowledged.
 
 ## MC-048 — Waveform visualization
 
-- Priority: P1 · Status: planned · Dependencies: MC-045
+- Priority: P1 · Status: in-progress · Dependencies: MC-045
 - Acceptance: Waveform metadata renders efficiently with loading, empty, unavailable, and long-sample states.
 
 ## MC-049 — Slice-boundary viewer
@@ -69,3 +69,13 @@
 
 - Priority: P1 · Status: planned · Dependencies: MC-119, MC-043
 - Acceptance: iPhone 6 Plus Safari uses a landscape layout; portrait shows a clear rotate-device prompt while preserving connection and session state.
+
+## MC-127 — Installable companion PWA
+
+- Priority: P1 · Status: done · Dependencies: MC-043, MC-044
+- Acceptance: iOS Safari can add the companion to the Home Screen using a manifest, standalone display mode, and service-worker shell fallback.
+
+## MC-128 — Companion performer instrument and pitch controls
+
+- Priority: P0 · Status: in-progress · Dependencies: MC-045, MC-047
+- Acceptance: Companion can select drums, bass, keys, or sampler and send a bounded -24 to +24 semitone pitch setting to the iPhone 14 performer.

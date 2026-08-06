@@ -2,7 +2,7 @@
 
 ## MC-056 — Server authoritative clock
 
-- Priority: P0 · Status: planned · Dependencies: MC-007
+- Priority: P0 · Status: done · Dependencies: MC-007
 - Acceptance: Server exposes a monotonic session clock independent of wall-clock changes and documents its time units.
 
 ## MC-057 — Clock synchronization handshake
@@ -12,7 +12,7 @@
 
 ## MC-058 — Transport state model
 
-- Priority: P0 · Status: planned · Dependencies: MC-056
+- Priority: P0 · Status: in-progress · Dependencies: MC-056
 - Acceptance: Play, pause, stop, BPM, beat, bar, and loop position have one authoritative state machine with legal transitions.
 
 ## MC-059 — Transport snapshots and deltas
@@ -59,4 +59,3 @@
 
 - Priority: P0 · Status: planned · Dependencies: MC-060, MC-061, MC-063
 - Acceptance: Automated simulation and real-device tests measure event timing, drift, jitter, and reconnect convergence.
-

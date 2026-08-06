@@ -11,6 +11,9 @@ const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.html");
+const companionPath = path.join(serverDirectory, "..", "web", "companion", "index.html");
+const companionManifestPath = path.join(serverDirectory, "..", "web", "companion", "manifest.webmanifest");
+const companionServiceWorkerPath = path.join(serverDirectory, "..", "web", "companion", "sw.js");
 const startedAt = Date.now();
 
 const rooms = new Map();
@@ -20,6 +23,7 @@ function createRoom(roomID) {
     id: roomID,
     sequence: 0,
     clients: new Map(),
+    clockTime: performance.now(),
     state: {
       transport: { playing: false, bpm: 118, beat: 0 },
       queue: [],
@@ -98,6 +102,7 @@ function applyEvent(room, client, input) {
 
   if (eventType === "transport" && typeof payload === "object") {
     room.state.transport = { ...room.state.transport, ...payload };
+    room.clockTime = performance.now();
   }
   if (eventType === "queue") room.state.queue = Array.isArray(payload.items) ? payload.items : room.state.queue;
   if (eventType === "loops") room.state.loops = Array.isArray(payload.items) ? payload.items : room.state.loops;
@@ -112,6 +117,29 @@ function applyEvent(room, client, input) {
     sequence,
     serverTime: event.serverTime
   });
+}
+
+function broadcastClock() {
+  const now = performance.now();
+  for (const room of rooms.values()) {
+    const elapsed = now - room.clockTime;
+    room.clockTime = now;
+    if (room.state.transport.playing) {
+      room.state.transport.beat += (elapsed / 60_000) * room.state.transport.bpm;
+    }
+    if (room.clients.size > 0) {
+      const message = {
+        version: PROTOCOL_VERSION,
+        type: "clock",
+        room: room.id,
+        serverTime: Date.now(),
+        beat: room.state.transport.beat,
+        bpm: room.state.transport.bpm,
+        playing: room.state.transport.playing
+      };
+      for (const client of room.clients.values()) send(client.socket, message);
+    }
+  }
 }
 
 function removeClient(client) {
@@ -188,19 +216,38 @@ function lanAddress() {
 }
 
 const httpServer = http.createServer((request, response) => {
-  if (request.url === "/composer" || request.url === "/composer/") {
+  const requestPath = new URL(request.url, "http://localhost").pathname;
+  if (requestPath === "/composer" || requestPath === "/composer/") {
     const body = fs.readFileSync(composerPath);
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
     response.end(body);
     return;
   }
-  if (request.url === "/health") {
+  if (requestPath === "/companion" || requestPath === "/companion/") {
+    const body = fs.readFileSync(companionPath);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/companion/manifest.webmanifest") {
+    const body = fs.readFileSync(companionManifestPath);
+    response.writeHead(200, { "content-type": "application/manifest+json; charset=utf-8", "cache-control": "no-cache" });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/companion/sw.js") {
+    const body = fs.readFileSync(companionServiceWorkerPath);
+    response.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/companion/" });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/health") {
     const body = JSON.stringify({ ok: true, rooms: rooms.size, clients: [...rooms.values()].reduce((total, room) => total + room.clients.size, 0), uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000), protocolVersion: PROTOCOL_VERSION });
     response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
     response.end(body);
     return;
   }
-  if (request.url === "/info") {
+  if (requestPath === "/info") {
     const address = lanAddress();
     const body = JSON.stringify({ protocolVersion: PROTOCOL_VERSION, room: "LOCAL", lanAddress: address, composerURL: address ? `http://${address}:${PORT}/composer` : null, websocketURL: address ? `ws://${address}:${PORT}/ws` : null });
     response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
@@ -240,6 +287,7 @@ function runHeartbeat(clients) {
 }
 
 const heartbeat = setInterval(() => runHeartbeat(websocketServer.clients), 20_000);
+const clockTimer = setInterval(broadcastClock, 100);
 
 httpServer.listen(PORT, HOST, () => {
   console.log(`MusiCollab session server listening on http://127.0.0.1:${PORT}`);
@@ -248,6 +296,7 @@ httpServer.listen(PORT, HOST, () => {
 
 function shutdown() {
   clearInterval(heartbeat);
+  clearInterval(clockTimer);
   websocketServer.close();
   httpServer.close(() => process.exit(0));
 }
@@ -255,4 +304,4 @@ function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-export { httpServer, rooms, heartbeat, runHeartbeat };
+export { httpServer, rooms, heartbeat, clockTimer, runHeartbeat, broadcastClock };

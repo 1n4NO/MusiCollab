@@ -12,9 +12,10 @@
 <body>
   <main>
     <header class="top"><div><div class="brand">MUSICOLLAB</div><div class="sub">Composer deck / local session</div></div><div class="status"><span id="statusDot" class="dot">●</span> <span id="statusText">connecting</span></div></header>
-    <section class="toolbar"><button class="button primary" id="play">▶ PLAY</button><button class="button" id="stop">■ STOP</button><button class="button" id="minus">−</button><div class="bpm" id="bpm">118 BPM</div><button class="button" id="plus">+</button><div class="roomTools"><input class="roomInput" id="roomInput" maxlength="32" aria-label="Room code" value="LOCAL"><button class="button" id="joinRoom">JOIN ROOM</button><button class="button" id="copyJoin">COPY JOIN LINK</button></div><div class="room">ROOM <b id="room">LOCAL</b><span class="join" id="joinInfo">LAN address loading…</span></div></section>
+    <section class="toolbar"><button class="button primary" id="play">▶ PLAY</button><button class="button" id="stop">■ STOP</button><button class="button" id="minus">−</button><div class="bpm" id="bpm">118 BPM</div><button class="button" id="plus">+</button><button class="button" id="monitor" aria-pressed="false">🔇 DESKTOP SOUND OFF</button><button class="button" id="monitorMute" aria-pressed="false">MUTE</button><label class="sub" for="monitorVolume">VOL <input id="monitorVolume" type="range" min="0" max="100" value="70" aria-label="Desktop monitor volume"></label><button class="button" id="panic">⏹ EMERGENCY STOP</button><div class="roomTools"><input class="roomInput" id="roomInput" maxlength="32" aria-label="Room code" value="LOCAL"><button class="button" id="joinRoom">JOIN ROOM</button><button class="button" id="copyJoin">COPY JOIN LINK</button></div><div class="room">ROOM <b id="room">LOCAL</b><span class="join" id="joinInfo">LAN address loading…</span></div></section>
     <div class="layout"><section class="panel"><div class="kicker">ARRANGEMENT</div><div class="tracks"><div class="track"><div class="trackhead"><span class="trackname">DRUM KIT</span><span class="trackstate">PERFORMER</span></div><div class="lane" id="drumLane"></div></div><div class="track"><div class="trackhead"><span class="trackname">BASS PULSE</span><span class="trackstate">READY</span></div><div class="lane"><i class="bar cyan" style="--h:26px"></i><i class="bar cyan" style="--h:42px"></i><i class="bar cyan" style="--h:20px"></i><i class="bar cyan" style="--h:34px"></i><i class="bar cyan" style="--h:18px"></i><i class="bar cyan" style="--h:39px"></i><i class="bar cyan" style="--h:24px"></i><i class="bar cyan" style="--h:32px"></i></div></div><div class="track"><div class="trackhead"><span class="trackname">SAMPLE CHOPS</span><span class="trackstate">COMPANION VIEW</span></div><div class="lane"><i class="bar coral" style="--h:36px"></i><i class="bar coral" style="--h:20px"></i><i class="bar coral" style="--h:45px"></i><i class="bar coral" style="--h:28px"></i><i class="bar coral" style="--h:38px"></i><i class="bar coral" style="--h:22px"></i></div></div></div></section><aside class="panel"><div class="kicker">CONNECTED CLIENTS</div><div id="clients"><div class="sub">Waiting for clients…</div></div><div class="kicker" style="margin-top:24px">EVENT STREAM</div><div class="eventlog" id="events"></div></aside></div>
   </main>
+  <div id="beat" class="bpm" style="margin:16px 28px">BEAT 0.00</div>
   <script>
     const state = { bpm: 118, playing: false };
     const params = new URLSearchParams(location.search);
@@ -38,12 +39,77 @@
     let ws = null;
     let reconnectTimer = null;
     let reconnectDelay = 1000;
+    let monitorGain = null;
+    let audioContext = null;
+    let monitorEnabled = false;
+    let monitorMuted = false;
+    const activeSources = new Set();
+    const seenEventIDs = new Set();
     const statusText = document.querySelector('#statusText');
     const statusDot = document.querySelector('#statusDot');
     const events = document.querySelector('#events');
     const clients = document.querySelector('#clients');
     function log(message){ events.textContent = `${new Date().toLocaleTimeString()}  ${message}\n` + events.textContent; }
     function send(eventType, payload){ if(ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'event',eventType,payload})); }
+    function playMonitorTone(pad){
+      if(!monitorEnabled || !audioContext) return;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const now = audioContext.currentTime;
+      const frequency = [90, 180, 420, 260, 220, 150, 760, 330][pad] || 220;
+      oscillator.type = pad === 0 ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, now);
+      if(pad === 0) oscillator.frequency.exponentialRampToValueAtTime(48, now + .18);
+      gain.gain.setValueAtTime(.0001, now);
+      gain.gain.exponentialRampToValueAtTime(.18, now + .005);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + (pad === 0 ? .24 : .12));
+      oscillator.connect(gain).connect(monitorGain || audioContext.destination);
+      activeSources.add(oscillator);
+      oscillator.addEventListener('ended', () => activeSources.delete(oscillator), {once:true});
+      oscillator.start(now);
+      oscillator.stop(now + (pad === 0 ? .25 : .13));
+    }
+    async function toggleMonitor(){
+      const button = document.querySelector('#monitor');
+      if(!audioContext){
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          monitorGain = audioContext.createGain();
+          monitorGain.connect(audioContext.destination);
+          audioContext.addEventListener('statechange', () => {
+            if(audioContext.state === 'closed') button.textContent='⚠ SOUND UNAVAILABLE';
+            if(audioContext.state === 'suspended' && monitorEnabled) button.textContent='⚠ SOUND SUSPENDED';
+          });
+        }
+        catch { button.textContent='⚠ SOUND UNAVAILABLE'; return; }
+      }
+      try { await audioContext.resume(); } catch { button.textContent='⚠ SOUND BLOCKED'; return; }
+      monitorEnabled = !monitorEnabled;
+      button.setAttribute('aria-pressed', String(monitorEnabled));
+      button.textContent = monitorEnabled ? '🔊 DESKTOP SOUND ON' : '🔇 DESKTOP SOUND OFF';
+      button.classList.toggle('active', monitorEnabled);
+      updateMonitorGain();
+      log(monitorEnabled ? 'desktop monitor enabled' : 'desktop monitor muted');
+    }
+    function updateMonitorGain(){
+      if(!monitorGain) return;
+      const volume = Number(document.querySelector('#monitorVolume').value) / 100;
+      monitorGain.gain.setTargetAtTime(monitorMuted ? 0 : volume, audioContext.currentTime, .01);
+    }
+    function toggleMonitorMute(){
+      monitorMuted = !monitorMuted;
+      const button = document.querySelector('#monitorMute');
+      button.setAttribute('aria-pressed', String(monitorMuted));
+      button.textContent = monitorMuted ? 'UNMUTE' : 'MUTE';
+      updateMonitorGain();
+      log(monitorMuted ? 'desktop monitor muted' : 'desktop monitor unmuted');
+    }
+    function emergencyStop(){
+      activeSources.forEach(source => { try { source.stop(); } catch {} });
+      activeSources.clear();
+      state.playing = false;
+      log('emergency stop — desktop monitor voices cleared');
+    }
     function renderClients(list){ clients.innerHTML = list.map(c => `<div class="client"><span>${c.name}</span><span class="role">${c.role}</span></div>`).join('') || '<div class="sub">Waiting for clients…</div>'; }
     function scheduleReconnect(){
       if(reconnectTimer) return;
@@ -63,13 +129,17 @@
       });
       ws.addEventListener('close', () => { log('connection closed — retrying'); scheduleReconnect(); });
       ws.addEventListener('error', () => { log('socket error — retrying'); });
-      ws.addEventListener('message', ({data}) => { const message=JSON.parse(data); if(message.type==='snapshot'||message.type==='roster') renderClients(message.clients); if(message.type==='event'){ log(`${message.eventType} from ${message.sender}`); if(message.eventType==='padHit'){ const bar=document.createElement('i'); bar.className='bar coral'; bar.style.setProperty('--h',`${20+Math.random()*30}px`); document.querySelector('#drumLane').prepend(bar); } } });
+      ws.addEventListener('message', ({data}) => { const message=JSON.parse(data); if(message.type==='clock'){ document.querySelector('#beat').textContent=`BEAT ${Number(message.beat||0).toFixed(2)}`; } if(message.type==='snapshot'||message.type==='roster') renderClients(message.clients); if(message.type==='event'){ if(message.eventID && seenEventIDs.has(message.eventID)) return; if(message.eventID){ seenEventIDs.add(message.eventID); if(seenEventIDs.size > 512) seenEventIDs.delete(seenEventIDs.values().next().value); } log(`${message.eventType} from ${message.sender}`); if(message.eventType==='padHit'){ const pad=Number(message.payload?.pad)||0; playMonitorTone(pad); const bar=document.createElement('i'); bar.className='bar coral'; bar.style.setProperty('--h',`${20+Math.random()*30}px`); document.querySelector('#drumLane').prepend(bar); } } });
     }
     connect();
     document.querySelector('#play').onclick=()=>{state.playing=true;send('transport',state);log('play');};
     document.querySelector('#stop').onclick=()=>{state.playing=false;send('transport',state);log('stop');};
     document.querySelector('#minus').onclick=()=>{state.bpm=Math.max(60,state.bpm-1);document.querySelector('#bpm').textContent=`${state.bpm} BPM`;send('transport',state);};
     document.querySelector('#plus').onclick=()=>{state.bpm=Math.min(180,state.bpm+1);document.querySelector('#bpm').textContent=`${state.bpm} BPM`;send('transport',state);};
+    document.querySelector('#monitor').onclick=toggleMonitor;
+    document.querySelector('#monitorMute').onclick=toggleMonitorMute;
+    document.querySelector('#monitorVolume').oninput=updateMonitorGain;
+    document.querySelector('#panic').onclick=emergencyStop;
   </script>
 </body>
 </html>

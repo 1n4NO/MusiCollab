@@ -1,0 +1,11 @@
+{
+  "name": "MusiCollab Companion",
+  "short_name": "MusiCollab",
+  "start_url": "/companion?room=LOCAL",
+  "scope": "/companion/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0b0e13",
+  "theme_color": "#0b0e13",
+  "description": "MusiCollab queue, waveform, instrument, and pitch companion."
+}
