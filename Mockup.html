@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MusiCollab UI Mockup</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0e1117;--panel:#1a1e26;--muted:#8d96a6;--cyan:#48e6f2;--coral:#ff5757;--violet:#a875ff}
+    *{box-sizing:border-box}body{margin:0;background:#07090d;color:#fff;font:14px -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;display:grid;place-items:center;min-height:100vh;padding:24px}
+    .phone{width:min(390px,100%);min-height:760px;background:var(--bg);border:1px solid #2b323e;border-radius:30px;padding:24px 16px;box-shadow:0 24px 80px #000;overflow:hidden}
+    .brand{font-weight:900;letter-spacing:.07em;font-size:21px}.sub,.kicker{color:var(--muted)}.sub{margin-top:5px;font-size:12px}
+    .panel{background:var(--panel);border:1px solid #2a303b;border-radius:14px;padding:12px;margin-top:14px}.transport{display:flex;align-items:center;gap:10px}.transport button,.action{height:42px;border:0;border-radius:10px;background:#252b34;color:#fff;font-weight:800;padding:0 13px}.play{color:var(--coral)!important;font-size:20px}.tempo{color:var(--cyan);font:700 17px ui-monospace,monospace}.connection{margin-left:auto;color:var(--muted);font-size:10px;font-weight:800}
+    .kicker{font-weight:800;font-size:10px;margin-top:18px;letter-spacing:.08em}.pads{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}.pad{height:72px;background:var(--panel);border:1px solid #2d3440;border-radius:12px;color:#fff;font-weight:800;font-size:11px}.pad:first-child{background:var(--coral);border-color:var(--coral)}.rows{display:grid;gap:8px}.row{display:flex;align-items:center}.row span:last-child{margin-left:auto;color:var(--muted);font-size:10px;font-weight:800}.playing{color:var(--coral)!important}.wave{height:70px;margin:10px 0;background:#10131a;border-radius:10px;display:flex;align-items:center;padding:0 8px;gap:4px}.bar{height:var(--h);width:4px;background:var(--violet);border-radius:4px}.actions{display:flex;gap:8px}.action{flex:1}.violet{color:var(--violet)}.cyan{color:var(--cyan)}
+  </style>
+</head>
+<body>
+  <main class="phone">
+    <div class="brand">MUSICOLLAB</div><div class="sub">Shared session / A-side</div>
+    <section class="panel transport"><button class="play">▶</button><button>−</button><div class="tempo">118 BPM</div><button>+</button><div class="connection">● CONNECTED</div></section>
+    <div class="kicker">DRUM PADS</div>
+    <section class="pads"><button class="pad">KICK</button><button class="pad">SNARE</button><button class="pad">HAT</button><button class="pad">CLAP</button><button class="pad">PERC</button><button class="pad">TOM</button><button class="pad">RIM</button><button class="pad">FX</button></section>
+    <div class="kicker">LOOPS / INSTRUMENTS</div>
+    <section class="panel rows"><div class="row"><b>DRUM KIT</b><span class="playing">● PLAYING</span></div><div class="row"><b>BASS PULSE</b><span>○ READY</span></div><div class="row"><b>NIGHT KEYS</b><span>○ READY</span></div></section>
+    <div class="kicker">SAMPLE LAB</div>
+    <section class="panel"><b>No sample loaded</b><div class="wave"><i class="bar" style="--h:8px"></i><i class="bar" style="--h:25px"></i><i class="bar" style="--h:19px"></i><i class="bar" style="--h:13px"></i><i class="bar" style="--h:30px"></i><i class="bar" style="--h:24px"></i><i class="bar" style="--h:18px"></i><i class="bar" style="--h:12px"></i><i class="bar" style="--h:29px"></i><i class="bar" style="--h:23px"></i><i class="bar" style="--h:17px"></i><i class="bar" style="--h:11px"></i><i class="bar" style="--h:28px"></i><i class="bar" style="--h:22px"></i><i class="bar" style="--h:16px"></i><i class="bar" style="--h:10px"></i><i class="bar" style="--h:27px"></i><i class="bar" style="--h:21px"></i><i class="bar" style="--h:15px"></i><i class="bar" style="--h:9px"></i><i class="bar" style="--h:26px"></i><i class="bar" style="--h:20px"></i><i class="bar" style="--h:14px"></i><i class="bar" style="--h:8px"></i><i class="bar" style="--h:25px"></i><i class="bar" style="--h:19px"></i><i class="bar" style="--h:13px"></i><i class="bar" style="--h:30px"></i><i class="bar" style="--h:24px"></i><i class="bar" style="--h:18px"></i><i class="bar" style="--h:12px"></i><i class="bar" style="--h:29px"></i><i class="bar" style="--h:23px"></i><i class="bar" style="--h:17px"></i><i class="bar" style="--h:11px"></i><i class="bar" style="--h:28px"></i></div><div class="actions"><button class="action violet">IMPORT SAMPLE</button><button class="action cyan">SLICE INTO 8</button></div></section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# MusiCollab
+
+Native iOS prototype for a two-iPhone collaborative music interface.
+
+## What is included
+
+- UIKit prototype UI for drum pads, tempo, loops, instruments, and sample slicing
+- `AVAudioEngine` skeleton for local low-latency playback
+- `MultipeerConnectivity` session skeleton for two nearby iPhones
+- Local sample import using `UIDocumentPickerViewController`
+- XcodeGen project specification
+- Browser mockup at `Mockup.html` for quick visual inspection
+
+## Important device constraint
+
+The iPhone 6 Plus supports iOS 12.5.x. This project therefore uses UIKit and an
+iOS 12 deployment target rather than SwiftUI-only APIs. Keep newer APIs behind
+availability checks.
+
+## Build setup
+
+1. Install full Xcode from the Mac App Store, then open it once and install the
+   iOS platform/device support files.
+2. Install XcodeGen if you want to generate the `.xcodeproj` from `project.yml`:
+
+   ```sh
+   brew install xcodegen
+   xcodegen generate
+   open MusiCollab.xcodeproj
+   ```
+
+3. Select a development team in Signing & Capabilities.
+4. Connect both physical iPhones, trust the Mac, and run the app on each.
+
+Do not add external MIDI support for this product. The initial audio contract is
+sample playback, drum-pad triggering, loop transport, and synchronized music
+events—not streaming raw audio between phones.
+
+## Planning
+
+- [Roadmap](./roadmap.md)
+- [Implementation phases](./phases/)
+- [GUI mockup](./Mockup.html)
