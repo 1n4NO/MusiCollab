@@ -71,7 +71,7 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
     }
 
     private func scheduleRetry() {
-        guard let connectionDetails, retryWorkItem == nil else { return }
+        guard connectionDetails != nil, retryWorkItem == nil else { return }
         let delay = retryDelay
         retryDelay = min(retryDelay * 2, 10)
         let workItem = DispatchWorkItem { [weak self] in

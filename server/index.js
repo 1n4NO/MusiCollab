@@ -4,13 +4,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
+import os from "node:os";
+import { PROTOCOL_VERSION, errorMessage, normalizeRoom, validateMessage } from "./protocol.js";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
-const PROTOCOL_VERSION = 1;
-const VALID_ROLES = new Set(["composer", "performer", "companion"]);
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.html");
+const startedAt = Date.now();
 
 const rooms = new Map();
 
@@ -103,6 +104,14 @@ function applyEvent(room, client, input) {
   if (eventType === "sample") room.state.sample = payload;
 
   for (const peer of room.clients.values()) send(peer.socket, event);
+  send(client.socket, {
+    version: PROTOCOL_VERSION,
+    type: "ack",
+    requestID: input.requestID ?? null,
+    eventID: event.eventID,
+    sequence,
+    serverTime: event.serverTime
+  });
 }
 
 function removeClient(client) {
@@ -115,17 +124,25 @@ function removeClient(client) {
 }
 
 function handleMessage(client, message) {
-  if (!message || typeof message !== "object") return;
+  const validation = validateMessage(message);
+  if (!validation.ok) {
+    send(client.socket, errorMessage(validation.code, validation.message, message?.requestID ?? null));
+    return;
+  }
 
   if (message.type === "hello") {
-    const role = VALID_ROLES.has(message.role) ? message.role : "companion";
-    const roomID = typeof message.room === "string" && message.room.trim() ? message.room.trim().toUpperCase() : "LOCAL";
-    client.id = typeof message.clientID === "string" && message.clientID.trim() ? message.clientID : crypto.randomUUID();
-    client.name = typeof message.name === "string" && message.name.trim() ? message.name : client.id;
+    const roomID = normalizeRoom(message.room);
+    const role = message.role;
+    client.id = message.clientID;
+    client.name = message.name.trim();
     client.role = role;
     client.room = roomID;
 
     const room = getRoom(roomID);
+    if (room.clients.has(client.id)) {
+      send(client.socket, errorMessage("CLIENT_ID_IN_USE", "Another client is already using this clientID."));
+      return;
+    }
     room.clients.set(client.id, client);
     send(client.socket, {
       version: PROTOCOL_VERSION,
@@ -136,13 +153,14 @@ function handleMessage(client, message) {
       serverTime: Date.now(),
       protocolVersion: PROTOCOL_VERSION
     });
+    send(client.socket, { version: PROTOCOL_VERSION, type: "ack", requestID: message.requestID ?? null, acknowledged: "hello", serverTime: Date.now() });
     sendSnapshot(room, client.socket);
     broadcastRoster(room);
     return;
   }
 
   if (!client.room) {
-    send(client.socket, { version: PROTOCOL_VERSION, type: "error", code: "HELLO_REQUIRED", message: "Send hello before other messages." });
+    send(client.socket, errorMessage("HELLO_REQUIRED", "Send hello before other messages.", message.requestID ?? null));
     return;
   }
 
@@ -153,9 +171,20 @@ function handleMessage(client, message) {
     applyEvent(room, client, message);
   } else if (message.type === "requestSnapshot") {
     sendSnapshot(room, client.socket);
+    send(client.socket, { version: PROTOCOL_VERSION, type: "ack", requestID: message.requestID ?? null, acknowledged: "requestSnapshot", serverTime: Date.now() });
   } else if (message.type === "ping") {
     send(client.socket, { version: PROTOCOL_VERSION, type: "pong", clientTime: message.clientTime ?? null, serverTime: Date.now() });
   }
+}
+
+function lanAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const entries of Object.values(interfaces)) {
+    for (const entry of entries ?? []) {
+      if (entry.family === "IPv4" && !entry.internal) return entry.address;
+    }
+  }
+  return null;
 }
 
 const httpServer = http.createServer((request, response) => {
@@ -166,7 +195,14 @@ const httpServer = http.createServer((request, response) => {
     return;
   }
   if (request.url === "/health") {
-    const body = JSON.stringify({ ok: true, rooms: rooms.size, clients: [...rooms.values()].reduce((total, room) => total + room.clients.size, 0) });
+    const body = JSON.stringify({ ok: true, rooms: rooms.size, clients: [...rooms.values()].reduce((total, room) => total + room.clients.size, 0), uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000), protocolVersion: PROTOCOL_VERSION });
+    response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    response.end(body);
+    return;
+  }
+  if (request.url === "/info") {
+    const address = lanAddress();
+    const body = JSON.stringify({ protocolVersion: PROTOCOL_VERSION, room: "LOCAL", lanAddress: address, composerURL: address ? `http://${address}:${PORT}/composer` : null, websocketURL: address ? `ws://${address}:${PORT}/ws` : null });
     response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
     response.end(body);
     return;
@@ -185,15 +221,15 @@ websocketServer.on("connection", (socket) => {
     try {
       handleMessage(client, JSON.parse(raw.toString()));
     } catch {
-      send(socket, { version: PROTOCOL_VERSION, type: "error", code: "INVALID_JSON", message: "Message must be valid JSON." });
+      send(socket, errorMessage("INVALID_JSON", "Message must be valid JSON."));
     }
   });
   socket.on("close", () => removeClient(client));
   socket.on("error", () => removeClient(client));
 });
 
-const heartbeat = setInterval(() => {
-  for (const client of websocketServer.clients) {
+function runHeartbeat(clients) {
+  for (const client of clients) {
     if (client.missedHeartbeats >= 2) {
       client.terminate();
       continue;
@@ -201,7 +237,9 @@ const heartbeat = setInterval(() => {
     client.missedHeartbeats += 1;
     client.ping();
   }
-}, 20_000);
+}
+
+const heartbeat = setInterval(() => runHeartbeat(websocketServer.clients), 20_000);
 
 httpServer.listen(PORT, HOST, () => {
   console.log(`MusiCollab session server listening on http://127.0.0.1:${PORT}`);
@@ -217,4 +255,4 @@ function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-export { httpServer, rooms, heartbeat };
+export { httpServer, rooms, heartbeat, runHeartbeat };

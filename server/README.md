@@ -11,9 +11,16 @@ npm install
 npm start
 ```
 
+Or use the first-run wrapper, which installs dependencies if needed:
+
+```sh
+./start.sh
+```
+
 The server exposes:
 
 - Health check: `http://127.0.0.1:8787/health`
+- LAN/session info: `http://127.0.0.1:8787/info`
 - Composer deck: `http://127.0.0.1:8787/composer`
 - WebSocket endpoint: `ws://127.0.0.1:8787/ws`
 
@@ -24,6 +31,9 @@ room in their `hello` message.
 For the native iPhone 14 app, `project.yml` currently points to this Mac's LAN
 address: `ws://192.168.29.33:8787/ws`. If the Mac's IP changes, update that
 value and run `xcodegen generate` again.
+
+The composer also displays the current LAN join URL. The `/info` response is
+the machine-readable source for setup tools and future QR-code joining.
 
 ## Client hello
 

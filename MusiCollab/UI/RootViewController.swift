@@ -1,7 +1,6 @@
 import UIKit
 
 final class RootViewController: UIViewController {
-    private let peerSession = PeerSession()
     private let audio = AudioEngine()
     private let samples = SampleLibrary()
     private var tempo = 118
@@ -24,10 +23,8 @@ final class RootViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = bg
         buildInterface()
-        wireSession()
         connectToSessionServer()
         audio.start()
-        peerSession.start()
     }
 
     private func buildInterface() {
@@ -233,16 +230,6 @@ final class RootViewController: UIViewController {
         return view
     }
 
-    private func wireSession() {
-        peerSession.onConnectionChanged = { [weak self] connected in
-            self?.connectionLabel.text = connected ? "● connected" : "● searching"
-            self?.connectionLabel.textColor = connected ? self?.cyan : .lightGray
-        }
-        peerSession.onEvent = { [weak self] event in
-            if event.type == .padHit { self?.flashPad(Int(event.value)) }
-        }
-    }
-
     private func connectToSessionServer() {
         guard #available(iOS 13.0, *),
               let urlString = Bundle.main.object(forInfoDictionaryKey: "MusiCollabServerURL") as? String,
@@ -265,7 +252,6 @@ final class RootViewController: UIViewController {
     @objc private func togglePlay() {
         isPlaying.toggle()
         playButton.setTitle(isPlaying ? "■" : "▶", for: .normal)
-        peerSession.send(MusicEvent(type: .transportChanged, trackID: "master", value: isPlaying ? 1 : 0))
         sessionTransport?.send(eventType: "transport", payload: ["playing": isPlaying, "bpm": tempo])
     }
 
@@ -275,14 +261,12 @@ final class RootViewController: UIViewController {
     private func setTempo(_ value: Int) {
         tempo = value
         tempoLabel.text = "\(tempo) BPM"
-        peerSession.send(MusicEvent(type: .tempoChanged, trackID: "master", value: Double(tempo)))
         sessionTransport?.send(eventType: "transport", payload: ["playing": isPlaying, "bpm": tempo])
     }
 
     @objc private func hitPad(_ sender: UIButton) {
         audio.trigger(note: UInt8(36 + sender.tag))
         flashPad(sender.tag)
-        peerSession.send(MusicEvent(type: .padHit, trackID: "drums", value: Double(sender.tag)))
         sessionTransport?.send(eventType: "padHit", payload: ["track": "drums", "pad": sender.tag, "velocity": 0.86])
     }
 

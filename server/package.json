@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
+    "start:lan": "./start.sh",
     "test": "node --test test/protocol.test.js"
   },
   "dependencies": {

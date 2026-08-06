@@ -2,8 +2,10 @@
 
 ## Status
 
-In progress — the local server, room handling, roles, snapshots, event relay,
-heartbeats, health endpoint, and protocol test are implemented.
+In progress — the local server, validated protocol, room handling, roles,
+snapshots, acknowledgements, event relay, tested heartbeats, health/info endpoints,
+LAN join display, room-code join/copy controls, start wrapper, and protocol tests are implemented. The three-
+client smoke test remains pending until the Phase 4 companion exists.
 
 ## Objective
 
