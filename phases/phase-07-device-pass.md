@@ -1,19 +1,20 @@
-# Phase 7 — Device-specific layout and performance
+# Phase 7 — Synchronization, reconnects, and latency hardening
 
 ## Objective
 
-Make the experience robust on the very different iPhone 14 and iPhone 6 Plus.
+Make the three-client session reliable under real use.
 
 ## Tasks
 
-- Test portrait layout, safe areas, text sizes, and touch targets on both phones.
-- Add a compact layout mode for the iPhone 6 Plus without hiding core actions.
-- Profile memory use during long sample sessions.
-- Test audio interruptions, phone calls, route changes, and app backgrounding.
-- Test reconnects, locked screens, and permission denial flows.
-- Add Reduce Motion and accessibility labels for playable controls.
+- Add reconnect with session resumption and a fresh state snapshot.
+- Handle duplicate, late, and out-of-order events.
+- Add client heartbeats and server-side timeouts.
+- Measure iPhone 14 local input latency separately from network latency.
+- Test queue changes while the iPhone 14 is performing.
+- Test Wi-Fi loss, Mac sleep, phone lock, app backgrounding, and audio route changes.
+- Add diagnostics export from the Mac composer deck.
 
 ## Done when
 
-The main workflow is comfortable on both devices and survives normal mobile
-interruptions without losing session state.
+The iPhone 14 stays playable during ordinary network interruptions, while the
+iPhone 6 Plus can reconnect and recover its companion state.

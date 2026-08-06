@@ -13,12 +13,14 @@
 		D01B21CF96CA6AFF1BE8221D /* RootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A4794612F5912908692B5B /* RootViewController.swift */; };
 		F1C6F0AD0E0BAC9FC4ADB55D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B625C23CA84811021E1684E /* PeerSession.swift */; };
 		F2CADD3ADAEA3A019A66007F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */; };
+		F5EB9995295BFCC170A8691E /* SessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FCF2C429FB4897706BF249E /* SessionTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		5104CC640B02170FBB741241 /* MusicModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicModels.swift; sourceTree = "<group>"; };
 		5B625C23CA84811021E1684E /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
+		7FCF2C429FB4897706BF249E /* SessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransport.swift; sourceTree = "<group>"; };
 		A5A4794612F5912908692B5B /* RootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootViewController.swift; sourceTree = "<group>"; };
 		ACDCF794B2C552CB92A265D9 /* MusiCollab.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MusiCollab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D61F3CF38D0F5A18EB36C35E /* SampleLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleLibrary.swift; sourceTree = "<group>"; };
@@ -55,6 +57,7 @@
 			isa = PBXGroup;
 			children = (
 				5B625C23CA84811021E1684E /* PeerSession.swift */,
+				7FCF2C429FB4897706BF249E /* SessionTransport.swift */,
 			);
 			path = Networking;
 			sourceTree = "<group>";
@@ -126,6 +129,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					367E8E5DE481E0CF2A8B3635 = {
+						DevelopmentTeam = L4Q834S9XV;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = E127E5C8D938D5EAE67FCB66 /* Build configuration list for PBXProject "MusiCollab" */;
@@ -158,6 +165,7 @@
 				F1C6F0AD0E0BAC9FC4ADB55D /* PeerSession.swift in Sources */,
 				D01B21CF96CA6AFF1BE8221D /* RootViewController.swift in Sources */,
 				15F8AEB5E48C9B051E36E717 /* SampleLibrary.swift in Sources */,
+				F5EB9995295BFCC170A8691E /* SessionTransport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -169,6 +177,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L4Q834S9XV;
 				INFOPLIST_FILE = MusiCollab/Info.plist;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect nearby iPhones for a shared music session.";
@@ -312,6 +322,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L4Q834S9XV;
 				INFOPLIST_FILE = MusiCollab/Info.plist;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect nearby iPhones for a shared music session.";

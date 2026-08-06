@@ -1,0 +1,13 @@
+{
+  "name": "musicollab-session-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/protocol.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

@@ -1,19 +1,20 @@
-# Phase 2 — Drum-pad playback
+# Phase 2 — Native iPhone 14 performance engine
 
 ## Objective
 
-Make the pad surface immediate and musical on each phone.
+Make the iPhone 14 the latency-sensitive performance surface.
 
 ## Tasks
 
-- Add bundled drum samples or a small starter soundbank.
-- Replace the sampler placeholder with a controlled drum voice rack.
-- Add touch-down and touch-up behavior with velocity approximation.
-- Add pad animation and optional haptic feedback where supported.
-- Measure first-hit latency on both devices.
-- Keep the audio engine on a real-time-safe path.
+- Keep the current UIKit pad UI and synthesized drum rack as the first sound.
+- Add the native WebSocket client for the shared protocol.
+- Play local pad sounds immediately on touch.
+- Send pad events to the Mac server after local triggering.
+- Receive remote events and schedule them against the shared beat clock.
+- Add instrument tracks, volume, mute, and arm state.
+- Keep raw audio off the network.
 
 ## Done when
 
-All eight pads produce distinct sounds and remain responsive during fast playing
-on both the iPhone 14 and iPhone 6 Plus.
+The iPhone 14 plays pads locally without waiting for the server and remains
+connected to the shared Mac session.

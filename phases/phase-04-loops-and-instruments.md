@@ -1,19 +1,21 @@
-# Phase 4 — Loops and instruments
+# Phase 4 — iPhone 6 Plus companion web app
 
 ## Objective
 
-Turn the transport into a playable collaborative arrangement surface.
+Give the legacy phone useful control and visualization without requiring
+latency-sensitive audio playback.
 
 ## Tasks
 
-- Define loop metadata: bars, BPM, key, source URL, and quantization mode.
-- Add loop import or bundled demo loops.
-- Build a loop scheduler aligned to the shared beat clock.
-- Add instrument tracks with volume, mute, arm, and trigger state.
-- Keep per-phone audio ownership explicit so duplicate playback is intentional.
-- Add a local scene/song-state model for saving the current session.
+- Add a lightweight `web/companion/` frontend compatible with iOS 12 Safari.
+- Support room-code or QR-code joining.
+- Add queue-up-next, scene selection, and transport commands.
+- Display waveform images/data and slice boundaries.
+- Add loading, disconnected, and retry states.
+- Keep bundles small and avoid modern browser APIs without fallbacks.
+- Add “companion mode” labeling so users know it is not the performance surface.
 
 ## Done when
 
-Users can start a drum loop on one phone, add an instrument on the other, mute
-tracks, and keep the arrangement aligned.
+The iPhone 6 Plus can join the Mac session, queue a track, and visualize the
+current waveform without affecting iPhone 14 audio timing.

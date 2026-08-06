@@ -19,6 +19,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.MusiCollab
+        DEVELOPMENT_TEAM: L4Q834S9XV
+        CODE_SIGN_STYLE: Automatic
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Connect nearby iPhones for a shared music session."
         INFOPLIST_KEY_UIFileSharingEnabled: true
@@ -26,6 +28,10 @@ targets:
     info:
       path: MusiCollab/Info.plist
       properties:
+        MusiCollabServerURL: "ws://192.168.29.33:8787/ws"
+        NSLocalNetworkUsageDescription: "Connect nearby iPhones for a shared music session."
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSBonjourServices:
           - _musicollab._tcp
         UIBackgroundModes:

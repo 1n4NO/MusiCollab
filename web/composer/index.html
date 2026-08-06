@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MusiCollab Composer</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0e13;--panel:#171c24;--line:#2a323f;--text:#f5f7fb;--muted:#8f9aaa;--cyan:#48e6f2;--coral:#ff5757;--violet:#a875ff}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px}.top{display:flex;align-items:center;gap:18px}.brand{font-size:24px;font-weight:900;letter-spacing:.08em}.sub{color:var(--muted)}.status{margin-left:auto;color:var(--muted);font-size:12px;font-weight:800}.dot{color:var(--coral)}.dot.connected{color:var(--cyan)}.toolbar{display:flex;gap:10px;align-items:center;margin-top:24px}.button{border:1px solid var(--line);background:var(--panel);border-radius:9px;color:var(--text);padding:11px 15px;font-weight:800;cursor:pointer}.button.primary{color:var(--coral)}.bpm{color:var(--cyan);font:700 17px ui-monospace,monospace;margin:0 10px}.room{margin-left:auto;color:var(--muted);font-size:12px}.room b{color:var(--text)}.layout{display:grid;grid-template-columns:1fr 300px;gap:18px;margin-top:20px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}.kicker{color:var(--muted);font-size:11px;font-weight:900;letter-spacing:.1em;margin-bottom:13px}.tracks{display:grid;gap:10px}.track{border:1px solid var(--line);border-radius:10px;overflow:hidden}.trackhead{display:flex;justify-content:space-between;padding:12px;background:#1c222c}.trackname{font-weight:800}.trackstate{color:var(--muted);font-size:11px}.lane{height:84px;display:flex;align-items:center;gap:5px;padding:12px;background:#10141b;overflow:hidden}.bar{height:var(--h);width:9px;background:var(--violet);border-radius:3px;flex:0 0 auto}.bar.cyan{background:var(--cyan)}.bar.coral{background:var(--coral)}.eventlog{height:300px;overflow:auto;color:var(--muted);font:12px ui-monospace,monospace;white-space:pre-wrap}.client{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}.client:last-child{border-bottom:0}.role{color:var(--cyan);font-size:11px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}main{padding:18px}}
+  </style>
+</head>
+<body>
+  <main>
+    <header class="top"><div><div class="brand">MUSICOLLAB</div><div class="sub">Composer deck / local session</div></div><div class="status"><span id="statusDot" class="dot">●</span> <span id="statusText">connecting</span></div></header>
+    <section class="toolbar"><button class="button primary" id="play">▶ PLAY</button><button class="button" id="stop">■ STOP</button><button class="button" id="minus">−</button><div class="bpm" id="bpm">118 BPM</div><button class="button" id="plus">+</button><div class="room">ROOM <b id="room">LOCAL</b></div></section>
+    <div class="layout"><section class="panel"><div class="kicker">ARRANGEMENT</div><div class="tracks"><div class="track"><div class="trackhead"><span class="trackname">DRUM KIT</span><span class="trackstate">PERFORMER</span></div><div class="lane" id="drumLane"></div></div><div class="track"><div class="trackhead"><span class="trackname">BASS PULSE</span><span class="trackstate">READY</span></div><div class="lane"><i class="bar cyan" style="--h:26px"></i><i class="bar cyan" style="--h:42px"></i><i class="bar cyan" style="--h:20px"></i><i class="bar cyan" style="--h:34px"></i><i class="bar cyan" style="--h:18px"></i><i class="bar cyan" style="--h:39px"></i><i class="bar cyan" style="--h:24px"></i><i class="bar cyan" style="--h:32px"></i></div></div><div class="track"><div class="trackhead"><span class="trackname">SAMPLE CHOPS</span><span class="trackstate">COMPANION VIEW</span></div><div class="lane"><i class="bar coral" style="--h:36px"></i><i class="bar coral" style="--h:20px"></i><i class="bar coral" style="--h:45px"></i><i class="bar coral" style="--h:28px"></i><i class="bar coral" style="--h:38px"></i><i class="bar coral" style="--h:22px"></i></div></div></div></section><aside class="panel"><div class="kicker">CONNECTED CLIENTS</div><div id="clients"><div class="sub">Waiting for clients…</div></div><div class="kicker" style="margin-top:24px">EVENT STREAM</div><div class="eventlog" id="events"></div></aside></div>
+  </main>
+  <script>
+    const state = { bpm: 118, playing: false };
+    const params = new URLSearchParams(location.search);
+    const room = (params.get('room') || 'LOCAL').toUpperCase();
+    document.querySelector('#room').textContent = room;
+    let ws = null;
+    let reconnectTimer = null;
+    let reconnectDelay = 1000;
+    const statusText = document.querySelector('#statusText');
+    const statusDot = document.querySelector('#statusDot');
+    const events = document.querySelector('#events');
+    const clients = document.querySelector('#clients');
+    function log(message){ events.textContent = `${new Date().toLocaleTimeString()}  ${message}\n` + events.textContent; }
+    function send(eventType, payload){ if(ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'event',eventType,payload})); }
+    function renderClients(list){ clients.innerHTML = list.map(c => `<div class="client"><span>${c.name}</span><span class="role">${c.role}</span></div>`).join('') || '<div class="sub">Waiting for clients…</div>'; }
+    function scheduleReconnect(){
+      if(reconnectTimer) return;
+      statusText.textContent='reconnecting';
+      statusDot.classList.remove('connected');
+      reconnectTimer=setTimeout(()=>{ reconnectTimer=null; connect(); }, reconnectDelay);
+      reconnectDelay=Math.min(reconnectDelay*2, 10000);
+    }
+    function connect(){
+      ws = new WebSocket(`ws://${location.host}/ws`);
+      ws.addEventListener('open', () => {
+        reconnectDelay=1000;
+        statusText.textContent='connected';
+        statusDot.classList.add('connected');
+        ws.send(JSON.stringify({type:'hello',room,clientID:'mac-composer',name:'Mac Composer',role:'composer'}));
+        log('joined room');
+      });
+      ws.addEventListener('close', () => { log('connection closed — retrying'); scheduleReconnect(); });
+      ws.addEventListener('error', () => { log('socket error — retrying'); });
+      ws.addEventListener('message', ({data}) => { const message=JSON.parse(data); if(message.type==='snapshot'||message.type==='roster') renderClients(message.clients); if(message.type==='event'){ log(`${message.eventType} from ${message.sender}`); if(message.eventType==='padHit'){ const bar=document.createElement('i'); bar.className='bar coral'; bar.style.setProperty('--h',`${20+Math.random()*30}px`); document.querySelector('#drumLane').prepend(bar); } } });
+    }
+    connect();
+    document.querySelector('#play').onclick=()=>{state.playing=true;send('transport',state);log('play');};
+    document.querySelector('#stop').onclick=()=>{state.playing=false;send('transport',state);log('stop');};
+    document.querySelector('#minus').onclick=()=>{state.bpm=Math.max(60,state.bpm-1);document.querySelector('#bpm').textContent=`${state.bpm} BPM`;send('transport',state);};
+    document.querySelector('#plus').onclick=()=>{state.bpm=Math.min(180,state.bpm+1);document.querySelector('#bpm').textContent=`${state.bpm} BPM`;send('transport',state);};
+  </script>
+</body>
+</html>

@@ -12,3 +12,7 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
+
+# Node.js
+node_modules/
+npm-debug.log*

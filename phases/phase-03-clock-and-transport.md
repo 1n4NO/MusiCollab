@@ -1,19 +1,20 @@
-# Phase 3 — Shared tempo clock and transport
+# Phase 3 — Mac composer deck
 
 ## Objective
 
-Give both phones one authoritative musical timeline.
+Build the desktop web app used to compose, arrange, and control the session.
 
 ## Tasks
 
-- Choose a host/master device for the first implementation.
-- Add BPM changes, play, stop, and beat position to session state.
-- Timestamp events against a monotonic clock rather than wall-clock time.
-- Add a short look-ahead scheduler for remote events.
-- Show peer beat indicators and drift diagnostics during development.
-- Handle host disconnect and host reassignment.
+- Add a `web/composer/` frontend with a wide-screen layout.
+- Connect to the Mac WebSocket server.
+- Show connected clients, roles, and session health.
+- Add play, stop, BPM, beat, bar, and queue controls.
+- Add track lanes for drums, instruments, loops, and samples.
+- Add a composer-friendly keyboard/mouse workflow.
+- Make the Mac deck the primary session control surface.
 
 ## Done when
 
-Both devices start and stop within the chosen tolerance, remain aligned for
-several minutes, and recover after the host disconnects.
+The Mac can create a room, see both phones, control transport, and display live
+musical events.

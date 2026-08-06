@@ -1,12 +1,13 @@
 # MusiCollab
 
-Native iOS prototype for a two-iPhone collaborative music interface.
+Three-client collaborative music workspace: a Mac composer web app, a native
+iPhone 14 performance app, and an iPhone 6 Plus web companion.
 
 ## What is included
 
 - UIKit prototype UI for drum pads, tempo, loops, instruments, and sample slicing
 - `AVAudioEngine` skeleton for local low-latency playback
-- `MultipeerConnectivity` session skeleton for two nearby iPhones
+- WebSocket session architecture for all three clients
 - Local sample import using `UIDocumentPickerViewController`
 - XcodeGen project specification
 - Browser mockup at `Mockup.html` for quick visual inspection
@@ -39,5 +40,6 @@ events—not streaming raw audio between phones.
 ## Planning
 
 - [Roadmap](./roadmap.md)
+- [Client architecture](./architecture.md)
 - [Implementation phases](./phases/)
 - [GUI mockup](./Mockup.html)

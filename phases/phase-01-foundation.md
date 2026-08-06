@@ -1,21 +1,26 @@
-# Phase 1 — Foundation and two-device connection
+# Phase 1 — Shared protocol and Mac session service
+
+## Status
+
+In progress — the local server, room handling, roles, snapshots, event relay,
+heartbeats, health endpoint, and protocol test are implemented.
 
 ## Objective
 
-Turn the skeleton into a buildable app that can discover and connect two physical
-iPhones locally.
+Create the local WebSocket backbone that all three clients use.
 
 ## Tasks
 
-- Install full Xcode and generate the project with XcodeGen.
-- Set the development team and unique bundle identifier.
-- Verify iOS 12 deployment compatibility on the iPhone 6 Plus.
-- Test local-network permission and Bonjour service discovery.
-- Add visible connection states: searching, inviting, connected, disconnected.
-- Add reconnect behavior after foregrounding or temporary Wi-Fi loss.
-- Define a versioned `MusicEvent` envelope for future protocol changes.
+- Add a Node.js WebSocket server under `server/`.
+- Define versioned JSON messages for hello, room join, state snapshot, pad hit,
+  transport, queue, loop, sample, and error events.
+- Assign roles: `composer`, `performer`, and `companion`.
+- Add sequence numbers, acknowledgements, and periodic state snapshots.
+- Add a room code and clear connection states.
+- Add a Mac-local start command and LAN address display.
+- Remove Multipeer Connectivity as the primary transport.
 
 ## Done when
 
-Two phones show each other as connected, reconnect after a temporary disconnect,
-and exchange a test event with no cloud service.
+The Mac server accepts three clients and relays a test event with a visible
+sender, role, sequence number, and connection status.

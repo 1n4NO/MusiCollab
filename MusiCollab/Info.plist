@@ -18,10 +18,19 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>MusiCollabServerURL</key>
+	<string>ws://192.168.29.33:8787/ws</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_musicollab._tcp</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect nearby iPhones for a shared music session.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

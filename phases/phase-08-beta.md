@@ -1,19 +1,20 @@
-# Phase 8 — TestFlight-ready beta
+# Phase 8 — Private beta and deployment
 
 ## Objective
 
-Prepare a reliable private beta for real two-person music sessions.
+Package the three-client system for repeatable local sessions and private beta.
 
 ## Tasks
 
-- Add tests for event encoding, slice boundaries, and transport state.
-- Add diagnostics for device, route, latency, and connection information.
-- Test multiple sample lengths, sample rates, and file formats.
-- Confirm privacy strings, background audio behavior, and App Store metadata.
-- Create an archive and distribute through TestFlight.
-- Collect feedback on musical latency, alignment, and clarity.
+- Add one-command Mac server startup and LAN discovery instructions.
+- Build the iPhone 14 app with signing and TestFlight support.
+- Publish the companion web app for the iPhone 6 Plus.
+- Add protocol and WebSocket integration tests.
+- Add sample-format, waveform, and slice-boundary tests.
+- Document the local Wi-Fi setup and room-joining flow.
+- Test the full Mac + iPhone 14 + iPhone 6 Plus workflow.
 
 ## Done when
 
-A small group can install the build, connect two phones, create a short session,
-and report issues with enough diagnostics to reproduce them.
+A user can start the Mac session, join both phones, queue a track from the
+iPhone 6 Plus, perform on the iPhone 14, and recover from a reconnect.

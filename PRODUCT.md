@@ -4,29 +4,30 @@
 
 ## Platform
 
-ios
+adaptive
 
 ## Users
 
-Assumption from the brief: one or two people using two iPhones side by side to
-make music together in a shared physical space.
+Assumption from the brief: one person composing on a Mac while performing on an
+iPhone 14 and using an iPhone 6 Plus as a lightweight companion surface.
 
 ## Product Purpose
 
-MusiCollab is a local two-iPhone music interface. Each phone contributes
-touchable musical controls while the pair shares tempo, loops, instruments, and
-sample-trigger events.
+MusiCollab is a three-client collaborative music workspace. The Mac hosts the
+composer deck, the iPhone 14 handles latency-sensitive instruments, and the
+iPhone 6 Plus handles queueing, waveform viewing, and other non-critical tasks.
 
 ## Positioning
 
-The distinctive mechanism is a shared musical workspace split across two nearby
-phone screens, synchronized at the event/state level rather than by streaming
-raw audio.
+The distinctive mechanism is one shared session protocol spanning a Mac web app,
+a native performance app, and a legacy-device web companion. Clients exchange
+timestamped musical events and state rather than raw audio.
 
 ## Operating Context
 
-The app is used with an iPhone 14 and an iPhone 6 Plus placed next to each
-other. It must work without a cloud account or external MIDI hardware.
+The app is used on one local Wi-Fi network with a Mac, an iPhone 14, and an
+iPhone 6 Plus. The Mac runs the WebSocket session service during the first
+version. The iPhone 6 Plus uses Safari; it does not need a native build.
 
 ## Capabilities and Constraints
 
@@ -36,12 +37,15 @@ other. It must work without a cloud account or external MIDI hardware.
 - Built-in or bundled instruments
 - Importing user-owned audio samples
 - Sample slicing into playable regions
-- Nearby peer discovery and shared event synchronization
-- Target iOS 12 for iPhone 6 Plus compatibility
-- UIKit is required for the first version; SwiftUI-only APIs are not suitable
+- Mac composer web app
+- Native iPhone 14 performance app
+- iPhone 6 Plus Safari companion web app
+- WebSocket session server and shared protocol
+- Target iOS 12 for the legacy web companion's browser constraints
+- Native iPhone 14 audio may target modern iOS APIs
 - External MIDI is intentionally out of scope
-- Precise audio synchronization across two independent speakers is an open
-  engineering constraint; one shared output is preferred for musical accuracy
+- Raw audio streaming over WebSockets is out of scope
+- The Mac/server owns session state and clock authority
 
 ## Evidence on Hand
 
@@ -54,4 +58,4 @@ audio should be clearly treated as placeholder content until replaced.
 - Keep the two-device connection understandable and recoverable.
 - Synchronize compact musical events, not large audio streams.
 - Let users hear the result within seconds of opening the app.
-- Preserve a usable reduced layout on the smaller iPhone 6 Plus screen.
+- Keep the iPhone 6 Plus useful without asking it to perform latency-sensitive audio.

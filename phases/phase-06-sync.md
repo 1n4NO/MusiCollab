@@ -1,20 +1,20 @@
-# Phase 6 — Cross-device musical synchronization
+# Phase 6 — Loops, instruments, samples, and slicing
 
 ## Objective
 
-Make remote actions feel like one shared instrument rather than two separate apps.
+Complete the musical content workflow across the three surfaces.
 
 ## Tasks
 
-- Send compact events for pad hits, slice triggers, tempo, transport, loops, and
-  track state.
-- Add event sequence numbers and duplicate suppression.
-- Add a peer clock-offset estimate and jitter buffer.
-- Quantize selected remote events to the next beat or bar.
-- Display connection quality and synchronization health.
-- Test burst traffic from fast pad playing and simultaneous interactions.
+- Add bundled and imported loops with bars, BPM, key, and quantization metadata.
+- Decode imported samples on the Mac or iPhone 14 and create waveform data.
+- Add draggable slice markers in the Mac composer deck.
+- Send only sample metadata and slice boundaries to the phones.
+- Cache audio assets locally on the iPhone 14 for playback.
+- Map slices to pads and scenes.
+- Allow the iPhone 6 Plus to view and select slices without playing them.
 
 ## Done when
 
-The same musical action produces a consistent result on both devices without
-sending raw audio over the network.
+The Mac can import and slice a sample, the iPhone 14 can perform the slices,
+and the iPhone 6 Plus can inspect and queue them.
