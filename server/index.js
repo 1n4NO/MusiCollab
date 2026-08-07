@@ -18,17 +18,95 @@ const startedAt = Date.now();
 
 const rooms = new Map();
 
+const MIN_BPM = 60;
+const MAX_BPM = 180;
+const DEFAULT_LOOP_LENGTH_BEATS = 16;
+const VALID_TEMPO_POLICIES = new Set(["preserve", "reset"]);
+
+function transportSnapshot(transport) {
+  return {
+    playing: transport.playing,
+    bpm: transport.bpm,
+    beat: transport.beat,
+    bar: Math.floor(transport.beat / 4) + 1,
+    loopLengthBeats: transport.loopLengthBeats,
+    loopPosition: transport.loopLengthBeats > 0 ? transport.beat % transport.loopLengthBeats : 0,
+    tempoPolicy: transport.tempoPolicy ?? "preserve"
+  };
+}
+
+function advanceTransport(room, now = performance.now()) {
+  const elapsed = Math.max(0, now - room.clockTime);
+  room.clockTime = now;
+  if (!room.state.transport.playing) return;
+  room.state.transport.beat += (elapsed / 60_000) * room.state.transport.bpm;
+}
+
+function normalizeTransport(room, payload) {
+  const current = room.state.transport;
+  const requestedAction = typeof payload.action === "string" ? payload.action.toLowerCase() : null;
+  const action = requestedAction || (payload.playing === true ? "play" : payload.playing === false ? "pause" : null);
+  const next = { ...current };
+
+  if (action === "play") next.playing = true;
+  if (action === "pause") next.playing = false;
+  if (action === "stop") {
+    next.playing = false;
+    next.beat = 0;
+  }
+  if (action && !["play", "pause", "stop"].includes(action)) return { error: "action must be play, pause, or stop." };
+
+  const tempoPolicy = payload.tempoPolicy ?? current.tempoPolicy ?? "preserve";
+  if (!VALID_TEMPO_POLICIES.has(tempoPolicy)) return { error: "tempoPolicy must be preserve or reset." };
+  const bpmChanged = payload.bpm !== undefined && Number(payload.bpm) !== current.bpm;
+  if (payload.bpm !== undefined) {
+    const bpm = Number(payload.bpm);
+    if (!Number.isFinite(bpm) || bpm < MIN_BPM || bpm > MAX_BPM) return { error: `bpm must be between ${MIN_BPM} and ${MAX_BPM}.` };
+    next.bpm = Math.round(bpm);
+  }
+  next.tempoPolicy = tempoPolicy;
+  if (bpmChanged && tempoPolicy === "reset") next.beat = 0;
+  if (payload.beat !== undefined) {
+    const beat = Number(payload.beat);
+    if (!Number.isFinite(beat) || beat < 0) return { error: "beat must be a non-negative number." };
+    next.beat = beat;
+  }
+  if (payload.loopLengthBeats !== undefined) {
+    const loopLengthBeats = Number(payload.loopLengthBeats);
+    if (!Number.isFinite(loopLengthBeats) || loopLengthBeats <= 0) return { error: "loopLengthBeats must be positive." };
+    next.loopLengthBeats = loopLengthBeats;
+  }
+
+  return { state: transportSnapshot(next) };
+}
+
+function eventTiming(room, input, serverTime) {
+  const transport = room.state.transport;
+  const quantization = input.quantization ?? "immediate";
+  let targetBeat = input.targetBeat;
+  if (targetBeat === undefined && quantization !== "immediate") {
+    const quantum = quantization === "2bar" ? 8 : quantization === "bar" ? 4 : 1;
+    targetBeat = Math.ceil((transport.beat + 0.001) / quantum) * quantum;
+  }
+  targetBeat ??= transport.beat;
+  const targetBar = input.targetBar ?? Math.floor(targetBeat / 4) + 1;
+  const targetServerTime = input.targetServerTime ?? serverTime + Math.max(0, targetBeat - transport.beat) * (60_000 / transport.bpm);
+  return { targetServerTime, targetBeat, targetBar, quantization };
+}
+
 function createRoom(roomID) {
   return {
     id: roomID,
     sequence: 0,
+    stateVersion: 0,
     clients: new Map(),
     clockTime: performance.now(),
     state: {
-      transport: { playing: false, bpm: 118, beat: 0 },
+      transport: transportSnapshot({ playing: false, bpm: 118, beat: 0, loopLengthBeats: DEFAULT_LOOP_LENGTH_BEATS }),
       queue: [],
       loops: [],
-      sample: null
+      sample: null,
+      pendingChanges: []
     }
   };
 }
@@ -49,7 +127,8 @@ function clientList(room) {
     id: client.id,
     name: client.name,
     role: client.role,
-    connectedAt: client.connectedAt
+    connectedAt: client.connectedAt,
+    metrics: client.metrics
   }));
 }
 
@@ -60,11 +139,14 @@ function sendSnapshot(room, socket = null) {
     room: room.id,
     serverTime: Date.now(),
     sequence: room.sequence,
+    stateVersion: room.stateVersion,
     state: room.state,
     clients: clientList(room)
   };
 
   if (socket) {
+    const target = [...room.clients.values()].find((client) => client.socket === socket);
+    if (target) target.metrics.lastSnapshotAt = Date.now();
     send(socket, message);
   } else {
     for (const client of room.clients.values()) send(client.socket, message);
@@ -86,6 +168,7 @@ function applyEvent(room, client, input) {
   const eventType = typeof input.eventType === "string" ? input.eventType : "unknown";
   const payload = input.payload && typeof input.payload === "object" ? input.payload : {};
   const sequence = ++room.sequence;
+  const eventTime = Date.now();
   const event = {
     version: PROTOCOL_VERSION,
     type: "event",
@@ -95,18 +178,41 @@ function applyEvent(room, client, input) {
     eventID: typeof input.eventID === "string" ? input.eventID : crypto.randomUUID(),
     sender: client.id,
     role: client.role,
-    serverTime: Date.now(),
+    serverTime: eventTime,
     beat: typeof input.beat === "number" ? input.beat : null,
-    payload
+    payload,
+    timing: eventTiming(room, input, eventTime)
   };
 
   if (eventType === "transport" && typeof payload === "object") {
-    room.state.transport = { ...room.state.transport, ...payload };
+    advanceTransport(room);
+    const normalized = normalizeTransport(room, payload);
+    if (normalized.error) {
+      send(client.socket, errorMessage("INVALID_TRANSPORT", normalized.error, input.requestID ?? null));
+      return;
+    }
+    room.state.transport = normalized.state;
+    event.payload = normalized.state;
     room.clockTime = performance.now();
   }
+  const isDeferred = ["queue", "scene"].includes(eventType) && event.timing.quantization !== "immediate";
+  if (isDeferred) {
+    const pending = { eventID: event.eventID, eventType, payload, timing: event.timing, sender: client.id };
+    room.state.pendingChanges.push(pending);
+    room.stateVersion += 1;
+    event.stateVersion = room.stateVersion;
+    event.pending = true;
+    for (const peer of room.clients.values()) send(peer.socket, event);
+    send(client.socket, { version: PROTOCOL_VERSION, type: "ack", requestID: input.requestID ?? null, eventID: event.eventID, sequence, stateVersion: room.stateVersion, pending: true, serverTime: event.serverTime });
+    return;
+  }
   if (eventType === "queue") room.state.queue = Array.isArray(payload.items) ? payload.items : room.state.queue;
+  if (eventType === "scene") room.state.scene = payload;
   if (eventType === "loops") room.state.loops = Array.isArray(payload.items) ? payload.items : room.state.loops;
   if (eventType === "sample") room.state.sample = payload;
+
+  room.stateVersion += 1;
+  event.stateVersion = room.stateVersion;
 
   for (const peer of room.clients.values()) send(peer.socket, event);
   send(client.socket, {
@@ -115,25 +221,42 @@ function applyEvent(room, client, input) {
     requestID: input.requestID ?? null,
     eventID: event.eventID,
     sequence,
+    stateVersion: room.stateVersion,
     serverTime: event.serverTime
   });
+}
+
+function applyPendingChanges(room, now = Date.now()) {
+  if (!room.state.pendingChanges.length) return;
+  const currentBeat = room.state.transport.beat;
+  const ready = room.state.pendingChanges.filter((change) => now >= change.timing.targetServerTime || currentBeat >= change.timing.targetBeat);
+  if (!ready.length) return;
+  room.state.pendingChanges = room.state.pendingChanges.filter((change) => !ready.includes(change));
+  for (const change of ready) {
+    if (change.eventType === "queue" && Array.isArray(change.payload.items)) room.state.queue = change.payload.items;
+    if (change.eventType === "scene") room.state.scene = change.payload;
+    room.stateVersion += 1;
+    const message = { version: PROTOCOL_VERSION, type: "stateChange", room: room.id, eventType: change.eventType, eventID: change.eventID, stateVersion: room.stateVersion, applied: true, payload: change.payload, timing: change.timing, serverTime: now };
+    for (const client of room.clients.values()) send(client.socket, message);
+  }
 }
 
 function broadcastClock() {
   const now = performance.now();
   for (const room of rooms.values()) {
-    const elapsed = now - room.clockTime;
-    room.clockTime = now;
-    if (room.state.transport.playing) {
-      room.state.transport.beat += (elapsed / 60_000) * room.state.transport.bpm;
-    }
+    advanceTransport(room, now);
+    room.state.transport = transportSnapshot(room.state.transport);
+    applyPendingChanges(room);
     if (room.clients.size > 0) {
       const message = {
         version: PROTOCOL_VERSION,
         type: "clock",
         room: room.id,
         serverTime: Date.now(),
-        beat: room.state.transport.beat,
+          beat: room.state.transport.beat,
+          bar: room.state.transport.bar,
+          loopPosition: room.state.transport.loopPosition,
+          loopLengthBeats: room.state.transport.loopLengthBeats,
         bpm: room.state.transport.bpm,
         playing: room.state.transport.playing
       };
@@ -197,11 +320,26 @@ function handleMessage(client, message) {
 
   if (message.type === "event") {
     applyEvent(room, client, message);
+  } else if (message.type === "metrics") {
+    client.metrics = {
+      offsetMs: Math.round(message.offsetMs),
+      rttMs: Math.round(Math.max(0, message.rttMs)),
+      jitterMs: Math.round(Math.max(0, message.jitterMs)),
+      lastSnapshotAt: Number.isFinite(message.lastSnapshotAt) ? message.lastSnapshotAt : client.metrics.lastSnapshotAt
+    };
+    broadcastRoster(room);
   } else if (message.type === "requestSnapshot") {
     sendSnapshot(room, client.socket);
     send(client.socket, { version: PROTOCOL_VERSION, type: "ack", requestID: message.requestID ?? null, acknowledged: "requestSnapshot", serverTime: Date.now() });
   } else if (message.type === "ping") {
-    send(client.socket, { version: PROTOCOL_VERSION, type: "pong", clientTime: message.clientTime ?? null, serverTime: Date.now() });
+    const serverReceiveTime = Date.now();
+    send(client.socket, {
+      version: PROTOCOL_VERSION,
+      type: "pong",
+      clientTime: message.clientTime ?? null,
+      serverReceiveTime,
+      serverTime: Date.now()
+    });
   }
 }
 
@@ -261,7 +399,7 @@ const httpServer = http.createServer((request, response) => {
 const websocketServer = new WebSocketServer({ server: httpServer, path: "/ws" });
 
 websocketServer.on("connection", (socket) => {
-  const client = { socket, id: null, name: null, role: null, room: null, connectedAt: Date.now() };
+  const client = { socket, id: null, name: null, role: null, room: null, connectedAt: Date.now(), metrics: { offsetMs: null, rttMs: null, jitterMs: null, lastSnapshotAt: null } };
   socket.missedHeartbeats = 0;
   socket.on("pong", () => { socket.missedHeartbeats = 0; });
   socket.on("message", (raw) => {
@@ -304,4 +442,4 @@ function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-export { httpServer, rooms, heartbeat, clockTimer, runHeartbeat, broadcastClock };
+export { httpServer, rooms, heartbeat, clockTimer, runHeartbeat, broadcastClock, applyPendingChanges };

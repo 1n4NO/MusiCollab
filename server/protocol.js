@@ -10,6 +10,7 @@ export const VALID_EVENT_TYPES = new Set([
   "scene",
   "instrument"
 ]);
+export const VALID_QUANTIZATIONS = new Set(["immediate", "beat", "bar", "2bar"]);
 
 const ROOM_PATTERN = /^[A-Z0-9_-]{1,32}$/;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,80}$/;
@@ -53,6 +54,28 @@ export function validateMessage(message) {
     }
     if (message.eventID !== undefined && (typeof message.eventID !== "string" || message.eventID.length > 100)) {
       return { ok: false, code: "INVALID_EVENT_ID", message: "eventID must be at most 100 characters." };
+    }
+    if (message.targetServerTime !== undefined && (!Number.isFinite(message.targetServerTime) || message.targetServerTime < 0)) {
+      return { ok: false, code: "INVALID_TARGET_TIME", message: "targetServerTime must be a non-negative number." };
+    }
+    if (message.targetBeat !== undefined && (!Number.isFinite(message.targetBeat) || message.targetBeat < 0)) {
+      return { ok: false, code: "INVALID_TARGET_BEAT", message: "targetBeat must be a non-negative number." };
+    }
+    if (message.targetBar !== undefined && (!Number.isInteger(message.targetBar) || message.targetBar < 1)) {
+      return { ok: false, code: "INVALID_TARGET_BAR", message: "targetBar must be a positive integer." };
+    }
+    if (message.quantization !== undefined && !VALID_QUANTIZATIONS.has(message.quantization)) {
+      return { ok: false, code: "INVALID_QUANTIZATION", message: "quantization must be immediate, beat, bar, or 2bar." };
+    }
+    return { ok: true };
+  }
+
+  if (message.type === "metrics") {
+    for (const field of ["offsetMs", "rttMs", "jitterMs"]) {
+      if (!Number.isFinite(message[field])) return { ok: false, code: "INVALID_METRICS", message: `${field} must be a number.` };
+    }
+    if (message.lastSnapshotAt !== undefined && (!Number.isFinite(message.lastSnapshotAt) || message.lastSnapshotAt < 0)) {
+      return { ok: false, code: "INVALID_METRICS", message: "lastSnapshotAt must be a non-negative number." };
     }
     return { ok: true };
   }

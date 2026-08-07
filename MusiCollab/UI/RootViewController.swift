@@ -16,6 +16,7 @@ final class RootViewController: UIViewController {
     private var importedSample: ImportedSample?
     private var sessionTransport: SessionTransport?
     private var receivedEventIDs = Set<String>()
+    private var clockOffsetMs: Double = 0
 
     private let bg = UIColor(red: 0.055, green: 0.065, blue: 0.09, alpha: 1)
     private let panel = UIColor(red: 0.10, green: 0.115, blue: 0.15, alpha: 1)
@@ -37,8 +38,18 @@ final class RootViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = bg
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAppActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         buildInterface()
         connectToSessionServer()
+        audio.start()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleAppActive() {
+        sessionTransport?.resync()
         audio.start()
     }
 
@@ -262,12 +273,20 @@ final class RootViewController: UIViewController {
             self?.connectionLabel.text = connected ? "● session online" : "● session offline"
             self?.connectionLabel.textColor = connected ? self?.cyan : .lightGray
         }
+        transport.onClockQuality = { [weak self] offset, rtt in
+            DispatchQueue.main.async {
+                self?.clockOffsetMs = Double(offset)
+                self?.connectionLabel.text = "● online  ±\(offset) ms / \(rtt) ms RTT"
+            }
+        }
         transport.onMessage = { [weak self] message in
             guard let self else { return }
             if message["type"] as? String == "clock" {
                 let beat = message["beat"] as? Double ?? 0
+                let bar = message["bar"] as? Int ?? 1
+                let loopPosition = message["loopPosition"] as? Double ?? 0
                 DispatchQueue.main.async {
-                    self.beatLabel.text = String(format: "BEAT %.2f", beat)
+                    self.beatLabel.text = String(format: "BEAT %.2f  ·  BAR %d  ·  LOOP %.2f", beat, bar, loopPosition)
                 }
                 return
             }
@@ -284,8 +303,9 @@ final class RootViewController: UIViewController {
             if eventType == "padHit", let payload = message["payload"] as? [String: Any], let pad = payload["pad"] as? Int {
                 let rawVelocity = (payload["velocity"] as? Double ?? 0.86) * 127
                 let velocity = UInt8(max(1, min(127, Int(rawVelocity))))
-                self.audio.trigger(note: UInt8(36 + pad), velocity: velocity)
-                self.flashPad(pad)
+                let timing = message["timing"] as? [String: Any]
+                let targetServerTime = timing?["targetServerTime"] as? Double
+                self.scheduleRemotePad(pad: pad, velocity: velocity, targetServerTime: targetServerTime)
             } else if eventType == "transport", let payload = message["payload"] as? [String: Any] {
                 if let playing = payload["playing"] as? Bool {
                     self.isPlaying = playing
@@ -305,10 +325,33 @@ final class RootViewController: UIViewController {
         transport.connect(room: "LOCAL", clientID: "iphone14", name: "iPhone 14", role: "performer")
     }
 
+    private func scheduleRemotePad(pad: Int, velocity: UInt8, targetServerTime: Double?) {
+        let note = UInt8(36 + pad)
+        guard let targetServerTime else {
+            audio.trigger(note: note, velocity: velocity)
+            flashPad(pad)
+            return
+        }
+
+        let estimatedLocalTime = (targetServerTime - clockOffsetMs) / 1000
+        let delay = estimatedLocalTime - Date().timeIntervalSince1970
+        if delay <= 0.02 {
+            audio.trigger(note: note, velocity: velocity)
+            flashPad(pad)
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            self.audio.trigger(note: note, velocity: velocity)
+            self.flashPad(pad)
+        }
+    }
+
     @objc private func togglePlay() {
         isPlaying.toggle()
         playButton.setTitle(isPlaying ? "■" : "▶", for: .normal)
-        sessionTransport?.send(eventType: "transport", payload: ["playing": isPlaying, "bpm": tempo])
+        sessionTransport?.send(eventType: "transport", payload: ["action": isPlaying ? "play" : "pause", "bpm": tempo])
     }
 
     @objc private func changeTempoDown() { setTempo(max(60, tempo - 1)) }
@@ -317,7 +360,7 @@ final class RootViewController: UIViewController {
     private func setTempo(_ value: Int) {
         tempo = value
         tempoLabel.text = "\(tempo) BPM"
-        sessionTransport?.send(eventType: "transport", payload: ["playing": isPlaying, "bpm": tempo])
+        sessionTransport?.send(eventType: "transport", payload: ["action": isPlaying ? "play" : "pause", "bpm": tempo])
     }
 
     @objc private func hitPad(_ sender: UIButton) {
