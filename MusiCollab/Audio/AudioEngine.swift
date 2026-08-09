@@ -14,6 +14,9 @@ final class AudioEngine: InstrumentVoice {
     let engine = AVAudioEngine()
     private var drumNodes: [AVAudioPlayerNode] = []
     private var pianoNodes: [AVAudioPlayerNode] = []
+    private let effectMixer = AVAudioMixerNode()
+    private let reverb = AVAudioUnitReverb()
+    private let delay = AVAudioUnitDelay()
     private var drumBuffers: [UInt8: AVAudioPCMBuffer] = [:]
     private var nextVoiceByPad = Array(repeating: 0, count: 8)
     private var nextPianoVoice = 0
@@ -29,18 +32,30 @@ final class AudioEngine: InstrumentVoice {
     private var isStarting = false
 
     init() {
+        engine.attach(effectMixer)
+        engine.attach(reverb)
+        engine.attach(delay)
+        engine.connect(effectMixer, to: reverb, format: format)
+        engine.connect(reverb, to: delay, format: format)
+        engine.connect(delay, to: engine.mainMixerNode, format: format)
+        reverb.loadFactoryPreset(.mediumHall)
+        reverb.wetDryMix = 0
+        delay.delayTime = 0.24
+        delay.feedback = 18
+        delay.wetDryMix = 0
+
         // Two voices per pad allow a fast retrigger to overlap naturally instead
         // of cutting off the previous hit on the same player node.
         for _ in 0..<16 {
             let node = AVAudioPlayerNode()
             engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: format)
+            engine.connect(node, to: effectMixer, format: format)
             drumNodes.append(node)
         }
         for _ in 0..<16 {
             let node = AVAudioPlayerNode()
             engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: format)
+            engine.connect(node, to: effectMixer, format: format)
             pianoNodes.append(node)
         }
         engine.prepare()
@@ -163,13 +178,13 @@ final class AudioEngine: InstrumentVoice {
     }
 
     func setInstrument(_ name: String, pitchSemitones: Int) {
-        let selected = ["drums", "bass", "keys", "piano", "sampler"].contains(name) ? name : "drums"
+        let selected = ["drums", "bass", "keys", "piano", "pad", "lead", "pluck", "sampler"].contains(name) ? name : "drums"
         let family = selected == "drums" ? "percussion" : selected == "sampler" ? "sample" : selected == "piano" ? "keyboard" : "synth"
         applyInstrument(InstrumentPreset(instrumentID: selected, instrument: selected, name: selected.capitalized, family: family, parameters: [:], pitch: pitchSemitones))
     }
 
     func applyInstrument(_ value: InstrumentPreset) {
-        let selected = ["drums", "bass", "keys", "piano", "sampler"].contains(value.instrument) ? value.instrument : "drums"
+        let selected = ["drums", "bass", "keys", "piano", "pad", "lead", "pluck", "sampler"].contains(value.instrument) ? value.instrument : "drums"
         let boundedParameters = value.parameters.reduce(into: [String: Double]()) { result, item in
             if item.key == "voiceCount" {
                 result[item.key] = min(32, max(1, item.value.rounded()))
@@ -188,13 +203,13 @@ final class AudioEngine: InstrumentVoice {
             postStatus("Audio unavailable — check the phone output route")
             return
         }
-        guard !trackMuted, soloTrackID == nil || soloTrackID == "piano" else { return }
-        let note = UInt8(60 + key)
+        guard !trackMuted, soloTrackID == nil || soloTrackID == preset.instrument else { return }
+        let note = UInt8((preset.instrument == "bass" ? 36 : 60) + key)
         let node = pianoNodes[nextPianoVoice]
         nextPianoVoice = (nextPianoVoice + 1) % pianoNodes.count
         node.stop()
         node.volume = Float(trackVolume)
-        node.scheduleBuffer(makePianoBuffer(note: note, velocity: velocity), at: nil, options: [])
+        node.scheduleBuffer(makeKeyboardBuffer(note: note, velocity: velocity, instrument: preset.instrument), at: nil, options: [])
         node.play()
     }
 
@@ -204,6 +219,14 @@ final class AudioEngine: InstrumentVoice {
 
     func setInstrumentParameter(_ name: String, value: Double) {
         guard value.isFinite else { return }
+        if name == "reverb" {
+            reverb.wetDryMix = Float(max(0, min(1, value)) * 100)
+            return
+        }
+        if name == "echo" {
+            delay.wetDryMix = Float(max(0, min(1, value)) * 100)
+            return
+        }
         var updated = preset.parameters
         if name == "voiceCount" {
             updated[name] = min(32, max(1, value.rounded()))
@@ -291,8 +314,8 @@ final class AudioEngine: InstrumentVoice {
         return buffer
     }
 
-    private func makePianoBuffer(note: UInt8, velocity: UInt8) -> AVAudioPCMBuffer {
-        let duration = 1.25
+    private func makeKeyboardBuffer(note: UInt8, velocity: UInt8, instrument: String) -> AVAudioPCMBuffer {
+        let duration: Double = instrument == "pad" ? 2.2 : instrument == "lead" ? 0.8 : instrument == "pluck" ? 0.65 : instrument == "bass" ? 0.9 : 1.25
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)!
         buffer.frameLength = frameCount
@@ -302,13 +325,29 @@ final class AudioEngine: InstrumentVoice {
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
             let attack = min(1.0, t / 0.008)
-            let decay = exp(-2.8 * t)
+            let decay = exp(-(instrument == "pad" ? 0.75 : instrument == "pluck" ? 5.2 : 2.8) * t)
             let envelope = Float(attack * decay)
-            let fundamental = sin(Float(2 * Double.pi * frequency * t))
-            let harmonic2 = sin(Float(2 * Double.pi * frequency * 2 * t)) * 0.42
-            let harmonic3 = sin(Float(2 * Double.pi * frequency * 3 * t)) * 0.18
-            let harmonic4 = sin(Float(2 * Double.pi * frequency * 4 * t)) * 0.08
-            samples[frame] = (fundamental + harmonic2 + harmonic3 + harmonic4) * envelope * gain * 0.42
+            let phase = Float(2 * Double.pi * frequency * t)
+            let fundamental: Float
+            let harmonics: Float
+            switch instrument {
+            case "bass":
+                fundamental = sin(phase) * 0.8
+                harmonics = sin(phase * 2) * 0.25 + sin(phase * 3) * 0.12
+            case "pad":
+                fundamental = sin(phase) * 0.48 + sin(phase * 1.006) * 0.42
+                harmonics = sin(phase * 2) * 0.18
+            case "lead":
+                fundamental = sin(phase) > 0 ? 0.55 : -0.55
+                harmonics = sin(phase * 2) * 0.16
+            case "pluck":
+                fundamental = sin(phase) * 0.72
+                harmonics = sin(phase * 2) * 0.32 + sin(phase * 4) * 0.12
+            default:
+                fundamental = sin(phase)
+                harmonics = sin(phase * 2) * 0.42 + sin(phase * 3) * 0.18 + sin(phase * 4) * 0.08
+            }
+            samples[frame] = (fundamental + harmonics) * envelope * gain * 0.42
         }
         return buffer
     }

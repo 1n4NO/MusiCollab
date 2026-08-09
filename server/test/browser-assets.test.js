@@ -63,6 +63,7 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(companion.body, /id="pitch"/);
   assert.match(companion.body, /min="-24" max="24"/);
   assert.match(companion.body, /value="piano"/);
+  assert.match(companion.body, /value="pad"/);
   assert.match(companion.body, /id="roomInput"/);
   assert.match(companion.body, /id="joinRoom"/);
   assert.match(companion.body, /id="sliceList"/);

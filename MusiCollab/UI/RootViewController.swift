@@ -13,6 +13,10 @@ final class RootViewController: UIViewController {
     private var playButton: UIButton!
     private var padButtons: [UIButton] = []
     private var pianoButtons: [UIButton] = []
+    private var pianoInstrumentButtons: [UIButton] = []
+    private var reverbControl: GestureEffectControl!
+    private var echoControl: GestureEffectControl!
+    private var keyboardInstrument = "piano"
     private var padHeightConstraints: [NSLayoutConstraint] = []
     private var activePadTouches = Set<Int>()
     private var warmedPads = Set<Int>()
@@ -210,20 +214,39 @@ final class RootViewController: UIViewController {
         }
         content.addArrangedSubview(grid)
 
-        content.addArrangedSubview(makeSectionLabel("PIANO · 8 KEYS"))
+        content.addArrangedSubview(makeSectionLabel("KEYBOARD · 8 KEYS"))
         let pianoPanel = makePanel()
+        let pianoContainer = UIStackView()
+        pianoContainer.axis = .vertical
+        pianoContainer.spacing = 8
+        pianoContainer.translatesAutoresizingMaskIntoConstraints = false
+        pianoPanel.addSubview(pianoContainer)
+        NSLayoutConstraint.activate([
+            pianoContainer.topAnchor.constraint(equalTo: pianoPanel.topAnchor, constant: 10),
+            pianoContainer.leadingAnchor.constraint(equalTo: pianoPanel.leadingAnchor, constant: 10),
+            pianoContainer.trailingAnchor.constraint(equalTo: pianoPanel.trailingAnchor, constant: -10),
+            pianoContainer.bottomAnchor.constraint(equalTo: pianoPanel.bottomAnchor, constant: -10)
+        ])
+        let instrumentPicker = UIStackView()
+        instrumentPicker.axis = .horizontal
+        instrumentPicker.spacing = 4
+        instrumentPicker.distribution = .fillEqually
+        ["piano", "bass", "pad", "lead", "pluck"].forEach { instrument in
+            let button = makeButton(title: instrument.uppercased(), color: instrument == keyboardInstrument ? violet : .white)
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 10, weight: .bold)
+            button.tag = pianoInstrumentButtons.count
+            button.accessibilityLabel = "Select (instrument) instrument"
+            button.addTarget(self, action: #selector(selectKeyboardInstrument(_:)), for: .touchUpInside)
+            instrumentPicker.addArrangedSubview(button)
+            pianoInstrumentButtons.append(button)
+        }
+        pianoContainer.addArrangedSubview(instrumentPicker)
         let pianoStack = UIStackView()
         pianoStack.axis = .horizontal
         pianoStack.spacing = 4
         pianoStack.distribution = .fillEqually
         pianoStack.translatesAutoresizingMaskIntoConstraints = false
-        pianoPanel.addSubview(pianoStack)
-        NSLayoutConstraint.activate([
-            pianoStack.topAnchor.constraint(equalTo: pianoPanel.topAnchor, constant: 10),
-            pianoStack.leadingAnchor.constraint(equalTo: pianoPanel.leadingAnchor, constant: 10),
-            pianoStack.trailingAnchor.constraint(equalTo: pianoPanel.trailingAnchor, constant: -10),
-            pianoStack.bottomAnchor.constraint(equalTo: pianoPanel.bottomAnchor, constant: -10)
-        ])
+        pianoContainer.addArrangedSubview(pianoStack)
         ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"].enumerated().forEach { index, name in
             let button = makePianoKey(title: name)
             button.tag = index
@@ -234,6 +257,12 @@ final class RootViewController: UIViewController {
             pianoButtons.append(button)
         }
         content.addArrangedSubview(pianoPanel)
+
+        content.addArrangedSubview(makeSectionLabel("EFFECTS · SLIDE LEFT → RIGHT"))
+        reverbControl = makeEffectControl(title: "REVERB", parameter: "reverb")
+        echoControl = makeEffectControl(title: "ECHO", parameter: "echo")
+        content.addArrangedSubview(reverbControl)
+        content.addArrangedSubview(echoControl)
 
         content.addArrangedSubview(makeSectionLabel("LOOPS  /  INSTRUMENTS"))
         let loops = makePanel()
@@ -484,7 +513,11 @@ final class RootViewController: UIViewController {
                 self.applyRemoteInstrument(payload.merging(["instrument": instrument]) { current, _ in current })
             } else if eventType == "instrumentParam", let payload = message["payload"] as? [String: Any], let parameters = payload["parameters"] as? [String: Any] {
                 for (name, value) in parameters {
-                    if let number = value as? Double { self.audio.setInstrumentParameter(name, value: number) }
+                    if let number = value as? Double {
+                        self.audio.setInstrumentParameter(name, value: number)
+                        if name == "reverb" { self.reverbControl?.setAmount(number) }
+                        if name == "echo" { self.echoControl?.setAmount(number) }
+                    }
                 }
                 self.performanceModeLabel.text = "Instrument parameters updated  /  \(parameters.count) controls"
             } else if eventType == "trackControl", let payload = message["payload"] as? [String: Any] {
@@ -640,17 +673,44 @@ final class RootViewController: UIViewController {
         return button
     }
 
+    private func makeEffectControl(title: String, parameter: String) -> GestureEffectControl {
+        let control = GestureEffectControl(title: title)
+        control.onAmountChanged = { [weak self] amount in
+            guard let self else { return }
+            self.audio.setInstrumentParameter(parameter, value: amount)
+            self.sessionTransport?.send(eventType: "instrumentParam", payload: [
+                "instrumentID": self.keyboardInstrument,
+                "parameter": parameter,
+                "value": amount
+            ])
+            self.performanceModeLabel.text = "\(title)  /  \(Int(amount * 100))%"
+        }
+        return control
+    }
+
     @objc private func hitPiano(_ sender: UIButton) {
-        audio.setInstrument("piano", pitchSemitones: 0)
+        audio.setInstrument(keyboardInstrument, pitchSemitones: 0)
         audio.triggerPiano(key: sender.tag)
         sender.backgroundColor = violet
         sender.accessibilityValue = "Playing"
         sessionTransport?.send(eventType: "noteOn", payload: [
-            "instrument": "piano",
+            "instrument": keyboardInstrument,
             "key": sender.tag,
             "velocity": 0.86,
             "beat": currentBeat
         ])
+    }
+
+    @objc private func selectKeyboardInstrument(_ sender: UIButton) {
+        let instruments = ["piano", "bass", "pad", "lead", "pluck"]
+        guard instruments.indices.contains(sender.tag) else { return }
+        keyboardInstrument = instruments[sender.tag]
+        audio.setInstrument(keyboardInstrument, pitchSemitones: 0)
+        pianoInstrumentButtons.enumerated().forEach { index, button in
+            button.setTitleColor(index == sender.tag ? violet : .white, for: .normal)
+        }
+        performanceModeLabel.text = "Keyboard instrument  /  (keyboardInstrument.uppercased())"
+        sessionTransport?.send(eventType: "instrument", payload: ["instrument": keyboardInstrument, "pitch": 0])
     }
 
     @objc private func tapPiano(_ sender: UIButton) {
@@ -726,6 +786,89 @@ extension RootViewController: UIDocumentPickerDelegate {
 
     private func formatDuration(_ duration: TimeInterval) -> String {
         String(format: "%.1fs", duration)
+    }
+}
+
+private final class GestureEffectControl: UIControl {
+    private let titleLabel = UILabel()
+    private let amountLabel = UILabel()
+    private let fillView = UIView()
+    private var panStartAmount: CGFloat = 0
+    private(set) var amount: CGFloat = 0
+    var onAmountChanged: ((Double) -> Void)?
+
+    init(title: String) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant: 56).isActive = true
+        backgroundColor = UIColor(red: 0.10, green: 0.115, blue: 0.15, alpha: 1)
+        layer.cornerRadius = 14
+        layer.borderWidth = 1
+        layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
+        clipsToBounds = true
+
+        fillView.backgroundColor = UIColor(red: 0.28, green: 0.90, blue: 0.95, alpha: 0.18)
+        fillView.isUserInteractionEnabled = false
+        addSubview(fillView)
+
+        titleLabel.text = title
+        titleLabel.textColor = .white
+        titleLabel.font = UIFont.systemFont(ofSize: 15, weight: .bold)
+        titleLabel.isUserInteractionEnabled = false
+        addSubview(titleLabel)
+
+        amountLabel.textColor = UIColor(red: 0.28, green: 0.90, blue: 0.95, alpha: 1)
+        amountLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 15, weight: .bold)
+        amountLabel.textAlignment = .right
+        amountLabel.isUserInteractionEnabled = false
+        addSubview(amountLabel)
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        pan.minimumNumberOfTouches = 1
+        addGestureRecognizer(pan)
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap(_:))))
+
+        accessibilityLabel = "\(title) amount"
+        accessibilityHint = "Slide from left to right to increase"
+        setAmount(0)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        fillView.frame = CGRect(x: 0, y: 0, width: bounds.width * amount, height: bounds.height)
+        titleLabel.frame = CGRect(x: 18, y: 0, width: max(0, bounds.width - 100), height: bounds.height)
+        amountLabel.frame = CGRect(x: max(0, bounds.width - 74), y: 0, width: 56, height: bounds.height)
+    }
+
+    func setAmount(_ value: Double) {
+        amount = max(0, min(1, CGFloat(value)))
+        amountLabel.text = "\(Int(amount * 100))%"
+        accessibilityValue = "\(Int(amount * 100)) percent"
+        setNeedsLayout()
+    }
+
+    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+        switch gesture.state {
+        case .began:
+            panStartAmount = amount
+        case .changed, .ended:
+            let translation = gesture.translation(in: self).x
+            let next = panStartAmount + translation / max(bounds.width, 1)
+            setAmount(Double(next))
+            if gesture.state == .changed || gesture.state == .ended {
+                onAmountChanged?(Double(amount))
+            }
+        default:
+            break
+        }
+    }
+
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: self)
+        setAmount(Double(location.x / max(bounds.width, 1)))
+        onAmountChanged?(Double(amount))
     }
 }
 

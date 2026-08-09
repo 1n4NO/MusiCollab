@@ -27,13 +27,14 @@ targets:
       - path: MusiCollab
     resources:
       - path: MusiCollab/LaunchScreen.storyboard
+      - path: MusiCollab/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.MusiCollab
         DEVELOPMENT_TEAM: L4Q834S9XV
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "0.1.13"
-        CURRENT_PROJECT_VERSION: "14"
+        MARKETING_VERSION: "0.1.16"
+        CURRENT_PROJECT_VERSION: "17"
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: false
         TARGETED_DEVICE_FAMILY: "1"

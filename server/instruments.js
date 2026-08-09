@@ -3,6 +3,9 @@ const BUILTIN_INSTRUMENTS = [
   { id: "bass", name: "Bass", family: "synth", parameters: { voiceCount: 1, cutoff: 0.42, character: 0.28 } },
   { id: "keys", name: "Keys", family: "synth", parameters: { voiceCount: 8, cutoff: 0.7, character: 0.2 } },
   { id: "piano", name: "Piano", family: "keyboard", parameters: { voiceCount: 8, brightness: 0.55, decay: 0.7 } },
+  { id: "pad", name: "Warm Pad", family: "synth", parameters: { voiceCount: 8, attack: 0.35, release: 0.8 } },
+  { id: "lead", name: "Mono Lead", family: "synth", parameters: { voiceCount: 1, cutoff: 0.78, character: 0.6 } },
+  { id: "pluck", name: "Pluck", family: "synth", parameters: { voiceCount: 8, brightness: 0.72, decay: 0.35 } },
   { id: "sampler", name: "Sampler", family: "sample", parameters: { voiceCount: 8, attack: 0.01, release: 0.35 } }
 ];
 
