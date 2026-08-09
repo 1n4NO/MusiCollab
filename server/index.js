@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
 import os from "node:os";
 import { PROTOCOL_VERSION, errorMessage, normalizeRoom, validateMessage } from "./protocol.js";
+import { ASSET_MODEL_VERSION, normalizeAsset, normalizeLibraryAction, normalizeLoopSelection, normalizeSceneAction, normalizeSliceMap } from "./assets.js";
+import { createDemoLibrary } from "./demo-content.js";
+import { normalizeInstrumentParameter, normalizeInstrumentSelection } from "./instruments.js";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -15,6 +18,7 @@ const companionPath = path.join(serverDirectory, "..", "web", "companion", "inde
 const companionManifestPath = path.join(serverDirectory, "..", "web", "companion", "manifest.webmanifest");
 const companionServiceWorkerPath = path.join(serverDirectory, "..", "web", "companion", "sw.js");
 const startedAt = Date.now();
+const serverInstanceID = crypto.randomBytes(12).toString("hex");
 
 const rooms = new Map();
 
@@ -22,6 +26,8 @@ const MIN_BPM = 60;
 const MAX_BPM = 180;
 const DEFAULT_LOOP_LENGTH_BEATS = 16;
 const VALID_TEMPO_POLICIES = new Set(["preserve", "reset"]);
+const LATE_EVENT_GRACE_MS = 100;
+const LATE_BEAT_GRACE = 0.25;
 
 function transportSnapshot(transport) {
   return {
@@ -94,19 +100,35 @@ function eventTiming(room, input, serverTime) {
   return { targetServerTime, targetBeat, targetBar, quantization };
 }
 
+function lateEventPolicy(room, eventType, input, serverTime) {
+  const lateByTime = Number.isFinite(input.targetServerTime) && input.targetServerTime < serverTime - LATE_EVENT_GRACE_MS;
+  const lateByBeat = Number.isFinite(input.targetBeat) && input.targetBeat < room.state.transport.beat - LATE_BEAT_GRACE;
+  if (!lateByTime && !lateByBeat) return null;
+  if (eventType === "padHit") return { late: true, policy: "apply-immediately" };
+  return { error: `${eventType} target is late; resend against the latest snapshot or omit the stale target.` };
+}
+
 function createRoom(roomID) {
+  const library = createDemoLibrary();
   return {
     id: roomID,
     sequence: 0,
     stateVersion: 0,
     clients: new Map(),
+    sessions: new Map(),
+    eventHistory: new Map(),
     clockTime: performance.now(),
     state: {
       transport: transportSnapshot({ playing: false, bpm: 118, beat: 0, loopLengthBeats: DEFAULT_LOOP_LENGTH_BEATS }),
       queue: [],
       loops: [],
+      instrument: { instrumentID: "drums", instrument: "drums", name: "Drums", family: "percussion", engine: "abstract", parameters: { voiceCount: 8, character: 0.35 }, pitch: 0 },
       sample: null,
-      pendingChanges: []
+      scene: { sceneID: "demo-scene-default" },
+      sceneOrder: library.scenes.map((scene) => scene.id),
+      sliceMappings: [],
+      pendingChanges: [],
+      library
     }
   };
 }
@@ -137,6 +159,7 @@ function sendSnapshot(room, socket = null) {
     version: PROTOCOL_VERSION,
     type: "snapshot",
     room: room.id,
+    serverInstanceID,
     serverTime: Date.now(),
     sequence: room.sequence,
     stateVersion: room.stateVersion,
@@ -164,18 +187,69 @@ function broadcastRoster(room) {
   for (const client of room.clients.values()) send(client.socket, message);
 }
 
+function storeAsset(room, asset) {
+  const collection = room.state.library[`${asset.type}s`];
+  if (!Array.isArray(collection)) return;
+  const index = collection.findIndex((existing) => existing.id === asset.id);
+  if (index >= 0) collection[index] = asset;
+  else collection.push(asset);
+}
+
+function applySceneAction(room, action) {
+  const scenes = room.state.library.scenes;
+  if (action.action === "recall") {
+    room.state.scene = { sceneID: action.sceneID };
+    return;
+  }
+  if (action.action === "rename") {
+    const scene = scenes.find((item) => item.id === action.sceneID);
+    if (scene) scene.name = action.name;
+    return;
+  }
+  if (action.action === "reorder") {
+    room.state.sceneOrder = [...action.order];
+    return;
+  }
+  const index = scenes.findIndex((item) => item.id === action.scene.id);
+  if (index >= 0) scenes[index] = action.scene;
+  else {
+    scenes.push(action.scene);
+    room.state.sceneOrder.push(action.scene.id);
+  }
+  room.state.scene = { sceneID: action.scene.id };
+}
+
+function applyLibraryAction(room, action) {
+  const asset = ["tracks", "instruments", "loops", "samples", "scenes", "slices"].flatMap((collection) => room.state.library[collection] || []).find((item) => item.id === action.assetID);
+  if (!asset) return;
+  if (action.action === "favorite") asset.favorite = action.favorite;
+  if (action.action === "tags") asset.tags = action.tags;
+  if (action.action === "missing" || action.action === "recover") asset.missing = action.missing;
+}
+
 function applyEvent(room, client, input) {
   const eventType = typeof input.eventType === "string" ? input.eventType : "unknown";
   const payload = input.payload && typeof input.payload === "object" ? input.payload : {};
-  const sequence = ++room.sequence;
+  const eventID = typeof input.eventID === "string" ? input.eventID : null;
+  if (eventID && room.eventHistory.has(eventID)) {
+    const previous = room.eventHistory.get(eventID);
+    send(client.socket, { version: PROTOCOL_VERSION, type: "ack", requestID: input.requestID ?? null, eventID, sequence: previous.sequence, stateVersion: previous.stateVersion, pending: previous.pending, duplicate: true, serverTime: previous.serverTime });
+    return;
+  }
   const eventTime = Date.now();
+  const latePolicy = lateEventPolicy(room, eventType, input, eventTime);
+  if (latePolicy?.error) {
+    send(client.socket, errorMessage("LATE_EVENT", latePolicy.error, input.requestID ?? null));
+    return;
+  }
+  const sequence = ++room.sequence;
   const event = {
     version: PROTOCOL_VERSION,
     type: "event",
     room: room.id,
     eventType,
     sequence,
-    eventID: typeof input.eventID === "string" ? input.eventID : crypto.randomUUID(),
+    eventID: eventID || crypto.randomUUID(),
     sender: client.id,
     role: client.role,
     serverTime: eventTime,
@@ -183,6 +257,23 @@ function applyEvent(room, client, input) {
     payload,
     timing: eventTiming(room, input, eventTime)
   };
+  if (Number.isFinite(input.clientSentAt)) {
+    event.latency = { clientToServerMs: Math.max(0, Math.round(eventTime - input.clientSentAt)) };
+  }
+  if (latePolicy?.late) Object.assign(event.timing, latePolicy);
+
+  let normalizedAsset;
+  if (eventType === "asset" || eventType === "sample") {
+    const source = eventType === "asset" ? payload.asset : { ...payload, type: "sample", id: payload.id || crypto.randomUUID() };
+    const result = normalizeAsset(source);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_ASSET", result.error, input.requestID ?? null));
+      return;
+    }
+    normalizedAsset = result.asset;
+    storeAsset(room, normalizedAsset);
+    event.payload = eventType === "asset" ? { asset: normalizedAsset } : normalizedAsset;
+  }
 
   if (eventType === "transport" && typeof payload === "object") {
     advanceTransport(room);
@@ -195,24 +286,95 @@ function applyEvent(room, client, input) {
     event.payload = normalized.state;
     room.clockTime = performance.now();
   }
-  const isDeferred = ["queue", "scene"].includes(eventType) && event.timing.quantization !== "immediate";
+  if (eventType === "sliceMap") {
+    const result = normalizeSliceMap(payload);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_SLICE_MAP", result.error, input.requestID ?? null));
+      return;
+    }
+    const sample = room.state.library.samples.find((asset) => asset.id === result.value.sampleID);
+    if (!sample) {
+      send(client.socket, errorMessage("INVALID_SLICE_MAP", "sliceMap.sampleID does not exist in the room library.", input.requestID ?? null));
+      return;
+    }
+    const sliceIDs = new Set((sample.slices || []).map((slice) => slice.id));
+    if (Object.values(result.value.assignments).some((sliceID) => sliceID !== null && !sliceIDs.has(sliceID))) {
+      send(client.socket, errorMessage("INVALID_SLICE_MAP", "sliceMap assignments must reference slices from the selected sample.", input.requestID ?? null));
+      return;
+    }
+    event.payload = result.value;
+    const index = room.state.sliceMappings.findIndex((mapping) => mapping.sampleID === result.value.sampleID && mapping.sceneID === result.value.sceneID);
+    if (index >= 0) room.state.sliceMappings[index] = result.value;
+    else room.state.sliceMappings.push(result.value);
+  }
+  if (eventType === "loops") {
+    const result = normalizeLoopSelection(payload, room.state.library);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_LOOPS", result.error, input.requestID ?? null));
+      return;
+    }
+    const bpm = room.state.transport.bpm;
+    event.payload = { ...result.value, loopLengthBeats: result.value.items[0] ? result.value.items[0].bars * 4 : DEFAULT_LOOP_LENGTH_BEATS, playbackRates: Object.fromEntries(result.value.items.map((loop) => [loop.id, Number((bpm / loop.bpm).toFixed(6))])) };
+    room.state.transport.loopLengthBeats = event.payload.loopLengthBeats;
+  }
+  if (eventType === "instrument") {
+    const result = normalizeInstrumentSelection(payload, room.state.library);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_INSTRUMENT", result.error, input.requestID ?? null));
+      return;
+    }
+    event.payload = result.value;
+    room.state.instrument = result.value;
+  }
+  if (eventType === "instrumentParam") {
+    const result = normalizeInstrumentParameter(payload, room.state.library, room.state.instrument);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_INSTRUMENT_PARAMETER", result.error, input.requestID ?? null));
+      return;
+    }
+    event.payload = { ...result.value, targetBeat: event.timing.targetBeat };
+    room.state.instrument = { ...room.state.instrument, parameters: result.value.parameters };
+  }
+  if (eventType === "scene") {
+    const result = normalizeSceneAction(payload, room.state.library);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_SCENE", result.error, input.requestID ?? null));
+      return;
+    }
+    event.payload = result.value;
+    applySceneAction(room, result.value);
+  }
+  if (eventType === "library") {
+    const result = normalizeLibraryAction(payload, room.state.library);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_LIBRARY", result.error, input.requestID ?? null));
+      return;
+    }
+    event.payload = result.value;
+    applyLibraryAction(room, result.value);
+  }
+  const isDeferred = ["queue"].includes(eventType) && event.timing.quantization !== "immediate";
   if (isDeferred) {
     const pending = { eventID: event.eventID, eventType, payload, timing: event.timing, sender: client.id };
     room.state.pendingChanges.push(pending);
     room.stateVersion += 1;
     event.stateVersion = room.stateVersion;
     event.pending = true;
+    room.eventHistory.set(event.eventID, { sequence, stateVersion: room.stateVersion, pending: true, serverTime: event.serverTime });
+    if (room.eventHistory.size > 512) room.eventHistory.delete(room.eventHistory.keys().next().value);
     for (const peer of room.clients.values()) send(peer.socket, event);
     send(client.socket, { version: PROTOCOL_VERSION, type: "ack", requestID: input.requestID ?? null, eventID: event.eventID, sequence, stateVersion: room.stateVersion, pending: true, serverTime: event.serverTime });
     return;
   }
   if (eventType === "queue") room.state.queue = Array.isArray(payload.items) ? payload.items : room.state.queue;
-  if (eventType === "scene") room.state.scene = payload;
-  if (eventType === "loops") room.state.loops = Array.isArray(payload.items) ? payload.items : room.state.loops;
-  if (eventType === "sample") room.state.sample = payload;
+  if (eventType === "loops") room.state.loops = event.payload;
+  if (eventType === "instrument") room.state.instrument = event.payload;
+  if (eventType === "sample") room.state.sample = normalizedAsset;
 
   room.stateVersion += 1;
   event.stateVersion = room.stateVersion;
+  room.eventHistory.set(event.eventID, { sequence, stateVersion: room.stateVersion, pending: false, serverTime: event.serverTime });
+  if (room.eventHistory.size > 512) room.eventHistory.delete(room.eventHistory.keys().next().value);
 
   for (const peer of room.clients.values()) send(peer.socket, event);
   send(client.socket, {
@@ -269,6 +431,7 @@ function removeClient(client) {
   if (!client.room) return;
   const room = rooms.get(client.room);
   if (!room) return;
+  if (room.clients.get(client.id) !== client) return;
   room.clients.delete(client.id);
   broadcastRoster(room);
   if (room.clients.size === 0) rooms.delete(room.id);
@@ -283,17 +446,26 @@ function handleMessage(client, message) {
 
   if (message.type === "hello") {
     const roomID = normalizeRoom(message.room);
-    const role = message.role;
-    client.id = message.clientID;
-    client.name = message.name.trim();
+    const room = getRoom(roomID);
+    const savedSession = message.sessionToken ? room.sessions.get(message.sessionToken) : null;
+    const role = savedSession?.role || message.role;
+    client.id = savedSession?.clientID || message.clientID;
+    client.name = savedSession?.name || message.name.trim();
     client.role = role;
     client.room = roomID;
-
-    const room = getRoom(roomID);
+    client.sessionToken = message.sessionToken || crypto.randomBytes(24).toString("base64url");
     if (room.clients.has(client.id)) {
-      send(client.socket, errorMessage("CLIENT_ID_IN_USE", "Another client is already using this clientID."));
-      return;
+      const existing = room.clients.get(client.id);
+      if (savedSession && existing.sessionToken === client.sessionToken) {
+        room.clients.delete(client.id);
+        existing.room = null;
+        existing.socket.close(1000, "session resumed");
+      } else {
+        send(client.socket, errorMessage("CLIENT_ID_IN_USE", "Another client is already using this clientID."));
+        return;
+      }
     }
+    room.sessions.set(client.sessionToken, { clientID: client.id, name: client.name, role: client.role, lastSeenAt: Date.now() });
     room.clients.set(client.id, client);
     send(client.socket, {
       version: PROTOCOL_VERSION,
@@ -301,6 +473,10 @@ function handleMessage(client, message) {
       room: roomID,
       clientID: client.id,
       role: client.role,
+      sessionToken: client.sessionToken,
+      sessionResumed: Boolean(savedSession),
+      serverInstanceID,
+      serverRestarted: Boolean(message.sessionToken && !savedSession),
       serverTime: Date.now(),
       protocolVersion: PROTOCOL_VERSION
     });
@@ -325,7 +501,12 @@ function handleMessage(client, message) {
       offsetMs: Math.round(message.offsetMs),
       rttMs: Math.round(Math.max(0, message.rttMs)),
       jitterMs: Math.round(Math.max(0, message.jitterMs)),
-      lastSnapshotAt: Number.isFinite(message.lastSnapshotAt) ? message.lastSnapshotAt : client.metrics.lastSnapshotAt
+      lastSnapshotAt: Number.isFinite(message.lastSnapshotAt) ? message.lastSnapshotAt : client.metrics.lastSnapshotAt,
+      reconnectCount: Number.isInteger(message.reconnectCount) ? message.reconnectCount : client.metrics.reconnectCount,
+      eventsSent: Number.isInteger(message.eventsSent) ? message.eventsSent : client.metrics.eventsSent,
+      eventsReceived: Number.isInteger(message.eventsReceived) ? message.eventsReceived : client.metrics.eventsReceived,
+      eventsLost: Number.isInteger(message.eventsLost) ? message.eventsLost : client.metrics.eventsLost,
+      lastError: typeof message.lastError === "string" ? message.lastError : client.metrics.lastError
     };
     broadcastRoster(room);
   } else if (message.type === "requestSnapshot") {
@@ -399,7 +580,7 @@ const httpServer = http.createServer((request, response) => {
 const websocketServer = new WebSocketServer({ server: httpServer, path: "/ws" });
 
 websocketServer.on("connection", (socket) => {
-  const client = { socket, id: null, name: null, role: null, room: null, connectedAt: Date.now(), metrics: { offsetMs: null, rttMs: null, jitterMs: null, lastSnapshotAt: null } };
+  const client = { socket, id: null, name: null, role: null, room: null, sessionToken: null, connectedAt: Date.now(), metrics: { offsetMs: null, rttMs: null, jitterMs: null, lastSnapshotAt: null, reconnectCount: 0, eventsSent: 0, eventsReceived: 0, eventsLost: 0, lastError: null } };
   socket.missedHeartbeats = 0;
   socket.on("pong", () => { socket.missedHeartbeats = 0; });
   socket.on("message", (raw) => {

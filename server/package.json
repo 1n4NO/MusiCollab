@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "start:lan": "./start.sh",
-    "test": "node --test test/protocol.test.js"
+    "test": "node --test --test-concurrency=1 test/protocol.test.js",
+    "test:network": "node --test --test-concurrency=1 test/network-interruption.test.js",
+    "test:soak": "node --test --test-concurrency=1 test/soak.test.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

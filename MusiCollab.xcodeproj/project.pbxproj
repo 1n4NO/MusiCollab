@@ -7,18 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06026601F5329182D6D54F9B /* AssetCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B145702A855230C370A575B6 /* AssetCache.swift */; };
 		15F8AEB5E48C9B051E36E717 /* SampleLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D61F3CF38D0F5A18EB36C35E /* SampleLibrary.swift */; };
 		1E0F0E5B687654E61F9385B6 /* AudioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDB65EFF68B856A66E3C066 /* AudioEngine.swift */; };
+		35099A6B3DC466ED5383AE0A /* MusicalAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2559297942B6F34C2E8F9DF3 /* MusicalAssets.swift */; };
 		D01B21CF96CA6AFF1BE8221D /* RootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A4794612F5912908692B5B /* RootViewController.swift */; };
 		F2CADD3ADAEA3A019A66007F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */; };
 		F5EB9995295BFCC170A8691E /* SessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FCF2C429FB4897706BF249E /* SessionTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		2559297942B6F34C2E8F9DF3 /* MusicalAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicalAssets.swift; sourceTree = "<group>"; };
 		26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7FCF2C429FB4897706BF249E /* SessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransport.swift; sourceTree = "<group>"; };
 		A5A4794612F5912908692B5B /* RootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootViewController.swift; sourceTree = "<group>"; };
 		ACDCF794B2C552CB92A265D9 /* MusiCollab.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MusiCollab.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B145702A855230C370A575B6 /* AssetCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetCache.swift; sourceTree = "<group>"; };
 		D61F3CF38D0F5A18EB36C35E /* SampleLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleLibrary.swift; sourceTree = "<group>"; };
 		DEDB65EFF68B856A66E3C066 /* AudioEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngine.swift; sourceTree = "<group>"; };
 		E9BC4A6DF2A8F405F3AF6B4B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -41,6 +45,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		5E54A576E1E0B3D02A0339DE /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2559297942B6F34C2E8F9DF3 /* MusicalAssets.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		6C538129EAE69BE6151D976A /* Networking */ = {
 			isa = PBXGroup;
 			children = (
@@ -60,6 +72,7 @@
 		90F25282CD8BA13FFD2611B9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B145702A855230C370A575B6 /* AssetCache.swift */,
 				D61F3CF38D0F5A18EB36C35E /* SampleLibrary.swift */,
 			);
 			path = Services;
@@ -79,6 +92,7 @@
 				26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */,
 				E9BC4A6DF2A8F405F3AF6B4B /* Info.plist */,
 				E79B341814828EEE58D4E52D /* Audio */,
+				5E54A576E1E0B3D02A0339DE /* Models */,
 				6C538129EAE69BE6151D976A /* Networking */,
 				90F25282CD8BA13FFD2611B9 /* Services */,
 				835435F5A313783A322FA513 /* UI */,
@@ -146,7 +160,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				F2CADD3ADAEA3A019A66007F /* AppDelegate.swift in Sources */,
+				06026601F5329182D6D54F9B /* AssetCache.swift in Sources */,
 				1E0F0E5B687654E61F9385B6 /* AudioEngine.swift in Sources */,
+				35099A6B3DC466ED5383AE0A /* MusicalAssets.swift in Sources */,
 				D01B21CF96CA6AFF1BE8221D /* RootViewController.swift in Sources */,
 				15F8AEB5E48C9B051E36E717 /* SampleLibrary.swift in Sources */,
 				F5EB9995295BFCC170A8691E /* SessionTransport.swift in Sources */,

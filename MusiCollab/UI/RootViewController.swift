@@ -16,6 +16,7 @@ final class RootViewController: UIViewController {
     private var importedSample: ImportedSample?
     private var sessionTransport: SessionTransport?
     private var receivedEventIDs = Set<String>()
+    private var sliceMappings: [String: [String: String]] = [:]
     private var clockOffsetMs: Double = 0
 
     private let bg = UIColor(red: 0.055, green: 0.065, blue: 0.09, alpha: 1)
@@ -39,6 +40,7 @@ final class RootViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = bg
         NotificationCenter.default.addObserver(self, selector: #selector(handleAppActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAppBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         buildInterface()
         connectToSessionServer()
         audio.start()
@@ -49,8 +51,12 @@ final class RootViewController: UIViewController {
     }
 
     @objc private func handleAppActive() {
-        sessionTransport?.resync()
+        sessionTransport?.resume()
         audio.start()
+    }
+
+    @objc private func handleAppBackground() {
+        sessionTransport?.suspend()
     }
 
     private func buildInterface() {
@@ -290,6 +296,14 @@ final class RootViewController: UIViewController {
                 }
                 return
             }
+            if message["type"] as? String == "snapshot",
+               let state = message["state"] as? [String: Any],
+               let library = state["library"] as? [String: Any],
+               let samples = library["samples"] as? [[String: Any]],
+               let sample = samples.first {
+                self.handleRemoteSampleMetadata(sample)
+                return
+            }
             guard message["type"] as? String == "event",
                   let eventID = message["eventID"] as? String,
                   !self.receivedEventIDs.contains(eventID) else { return }
@@ -305,6 +319,11 @@ final class RootViewController: UIViewController {
                 let velocity = UInt8(max(1, min(127, Int(rawVelocity))))
                 let timing = message["timing"] as? [String: Any]
                 let targetServerTime = timing?["targetServerTime"] as? Double
+                let serverToPeerMs = max(0, Date().timeIntervalSince1970 * 1000 - ((message["serverTime"] as? Double ?? 0) + self.clockOffsetMs))
+                let clientToServerMs = ((message["latency"] as? [String: Any])?["clientToServerMs"] as? Double) ?? 0
+                DispatchQueue.main.async {
+                    self.performanceModeLabel.text = String(format: "Latency  /  client→server %.0f ms  /  server→peer %.0f ms", clientToServerMs, serverToPeerMs)
+                }
                 self.scheduleRemotePad(pad: pad, velocity: velocity, targetServerTime: targetServerTime)
             } else if eventType == "transport", let payload = message["payload"] as? [String: Any] {
                 if let playing = payload["playing"] as? Bool {
@@ -319,10 +338,56 @@ final class RootViewController: UIViewController {
                 let pitch = payload["pitch"] as? Int ?? 0
                 self.audio.setInstrument(instrument, pitchSemitones: pitch)
                 self.performanceModeLabel.text = "Shared session  /  \(instrument.uppercased())  /  \(pitch >= 0 ? "+" : "")\(pitch) st"
+            } else if eventType == "instrumentParam", let payload = message["payload"] as? [String: Any], let parameters = payload["parameters"] as? [String: Any] {
+                for (name, value) in parameters {
+                    if let number = value as? Double { self.audio.setInstrumentParameter(name, value: number) }
+                }
+                self.performanceModeLabel.text = "Instrument parameters updated  /  \(parameters.count) controls"
+            } else if eventType == "asset", let payload = message["payload"] as? [String: Any], let asset = payload["asset"] as? [String: Any], asset["type"] as? String == "sample" {
+                self.handleRemoteSampleMetadata(asset)
+            } else if eventType == "sliceMap", let sampleID = (message["payload"] as? [String: Any])?["sampleID"] as? String, let assignments = (message["payload"] as? [String: Any])?["assignments"] as? [String: Any] {
+                let mapped = assignments.compactMapValues { $0 as? String }
+                self.sliceMappings[sampleID] = mapped
+                self.sampleTitleLabel.text = "Pad map received  /  \(mapped.count) pads assigned"
+            } else if eventType == "loops", let payload = message["payload"] as? [String: Any], let items = payload["items"] as? [[String: Any]], let loop = items.first {
+                let name = loop["name"] as? String ?? "Loop"
+                let bars = loop["bars"] as? Int ?? 1
+                let bpm = loop["bpm"] as? Double ?? 0
+                self.performanceModeLabel.text = "Loop  /  \(name)  /  \(bars) bars  /  \(Int(bpm)) BPM"
             }
         }
         sessionTransport = transport
         transport.connect(room: "LOCAL", clientID: "iphone14", name: "iPhone 14", role: "performer")
+    }
+
+    private func handleRemoteSampleMetadata(_ dictionary: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
+              let asset = try? JSONDecoder().decode(MusicalAsset.self, from: data),
+              asset.type == .sample else { return }
+        let name = asset.name
+        let duration = asset.duration ?? 0
+        let sliceCount = asset.slices?.count ?? 0
+        DispatchQueue.main.async {
+            self.sampleTitleLabel.text = "\(name)  /  \(self.formatDuration(duration))  /  \(sliceCount) slices metadata"
+        }
+        guard #available(iOS 13.0, *), asset.transfer?.kind == "url" else {
+            if asset.transfer?.kind == "reference" {
+                DispatchQueue.main.async { self.sampleTitleLabel.text = "\(name)  /  metadata ready  /  reference transfer pending" }
+            }
+            return
+        }
+        AssetCache.shared.cache(asset) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .cached:
+                    self.sampleTitleLabel.text = "\(name)  /  cached locally  /  \(sliceCount) slices"
+                case .metadataOnly:
+                    self.sampleTitleLabel.text = "\(name)  /  metadata ready  /  audio not downloaded"
+                case .failed(let message):
+                    self.sampleTitleLabel.text = "\(name)  /  cache retry failed: \(message)"
+                }
+            }
+        }
     }
 
     private func scheduleRemotePad(pad: Int, velocity: UInt8, targetServerTime: Double?) {
@@ -364,9 +429,12 @@ final class RootViewController: UIViewController {
     }
 
     @objc private func hitPad(_ sender: UIButton) {
+        let inputAt = Date().timeIntervalSince1970 * 1000
         audio.trigger(note: UInt8(36 + sender.tag))
+        let audioAt = Date().timeIntervalSince1970 * 1000
         flashPad(sender.tag)
-        sessionTransport?.send(eventType: "padHit", payload: ["track": "drums", "pad": sender.tag, "velocity": 0.86])
+        performanceModeLabel.text = String(format: "Latency  /  touch→audio %.1f ms", audioAt - inputAt)
+        sessionTransport?.send(eventType: "padHit", payload: ["track": "drums", "pad": sender.tag, "velocity": 0.86, "inputAt": inputAt, "audioAt": audioAt])
     }
 
     private func flashPad(_ index: Int) {

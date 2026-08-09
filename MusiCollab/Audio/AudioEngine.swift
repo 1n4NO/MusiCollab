@@ -8,6 +8,7 @@ final class AudioEngine {
     private let audioSession = AVAudioSession.sharedInstance()
     private var instrument = "drums"
     private var pitchSemitones = 0
+    private var parameters: [String: Double] = [:]
 
     init() {
         for _ in 0..<8 {
@@ -88,6 +89,17 @@ final class AudioEngine {
     func setInstrument(_ name: String, pitchSemitones: Int) {
         instrument = ["drums", "bass", "keys", "sampler"].contains(name) ? name : "drums"
         self.pitchSemitones = max(-24, min(24, pitchSemitones))
+        parameters = [:]
+        drumBuffers.removeAll()
+    }
+
+    func setInstrumentParameter(_ name: String, value: Double) {
+        guard value.isFinite else { return }
+        if name == "voiceCount" {
+            parameters[name] = min(32, max(1, value.rounded()))
+        } else {
+            parameters[name] = min(1, max(-1, value))
+        }
         drumBuffers.removeAll()
     }
 

@@ -8,12 +8,17 @@ export const VALID_EVENT_TYPES = new Set([
   "loops",
   "sample",
   "scene",
-  "instrument"
+  "instrument",
+  "instrumentParam",
+  "asset",
+  "sliceMap",
+  "library"
 ]);
 export const VALID_QUANTIZATIONS = new Set(["immediate", "beat", "bar", "2bar"]);
 
 const ROOM_PATTERN = /^[A-Z0-9_-]{1,32}$/;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,80}$/;
+const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
 function text(value, field, maxLength = 80) {
   if (typeof value !== "string" || !value.trim() || value.length > maxLength) {
@@ -44,6 +49,9 @@ export function validateMessage(message) {
     const nameError = text(message.name, "name");
     if (nameError) return { ok: false, code: "INVALID_NAME", message: nameError };
     if (!VALID_ROLES.has(message.role)) return { ok: false, code: "INVALID_ROLE", message: "role must be composer, performer, or companion." };
+    if (message.sessionToken !== undefined && (typeof message.sessionToken !== "string" || !SESSION_TOKEN_PATTERN.test(message.sessionToken))) {
+      return { ok: false, code: "INVALID_SESSION_TOKEN", message: "sessionToken must be a 16–128 character opaque token." };
+    }
     return { ok: true };
   }
 
@@ -76,6 +84,14 @@ export function validateMessage(message) {
     }
     if (message.lastSnapshotAt !== undefined && (!Number.isFinite(message.lastSnapshotAt) || message.lastSnapshotAt < 0)) {
       return { ok: false, code: "INVALID_METRICS", message: "lastSnapshotAt must be a non-negative number." };
+    }
+    for (const field of ["reconnectCount", "eventsSent", "eventsReceived", "eventsLost"]) {
+      if (message[field] !== undefined && (!Number.isInteger(message[field]) || message[field] < 0)) {
+        return { ok: false, code: "INVALID_METRICS", message: `${field} must be a non-negative integer.` };
+      }
+    }
+    if (message.lastError !== undefined && (typeof message.lastError !== "string" || message.lastError.length > 160)) {
+      return { ok: false, code: "INVALID_METRICS", message: "lastError must be at most 160 characters." };
     }
     return { ok: true };
   }
