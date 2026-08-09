@@ -25,6 +25,7 @@ const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.
 const companionPath = path.join(serverDirectory, "..", "web", "companion", "index.html");
 const companionManifestPath = path.join(serverDirectory, "..", "web", "companion", "manifest.webmanifest");
 const companionServiceWorkerPath = path.join(serverDirectory, "..", "web", "companion", "sw.js");
+const zustandVanillaPath = path.join(serverDirectory, "node_modules", "zustand", "esm", "vanilla.mjs");
 const brandingDirectory = path.join(serverDirectory, "..", "branding");
 const startedAt = Date.now();
 const serverInstanceID = crypto.randomBytes(12).toString("hex");
@@ -152,6 +153,7 @@ function createRoom(roomID) {
     clockTime: performance.now(),
     state: {
       transport: transportSnapshot({ playing: false, bpm: 118, beat: 0, loopLengthBeats: DEFAULT_LOOP_LENGTH_BEATS }),
+      surface: { companion: "queue" },
       queue: [],
       loops: [],
       instrument: { instrumentID: "drums", instrument: "drums", name: "Drums", family: "percussion", engine: "abstract", parameters: { voiceCount: 8, character: 0.35 }, pitch: 0 },
@@ -377,6 +379,14 @@ function applyEvent(room, client, input) {
     event.payload = result.value;
     room.state.tracks[result.value.trackID] = result.value;
   }
+  if (eventType === "surface") {
+    if (payload.target !== "companion" || !["queue", "rhythm-generator"].includes(payload.surface)) {
+      send(client.socket, errorMessage("INVALID_SURFACE", "surface must target companion and select queue or rhythm-generator.", input.requestID ?? null));
+      return;
+    }
+    event.payload = { target: "companion", surface: payload.surface };
+    room.state.surface.companion = payload.surface;
+  }
   if (eventType === "scene") {
     const result = normalizeSceneAction(payload, room.state.library);
     if (result.error) {
@@ -581,6 +591,18 @@ const requestHandler = (request, response) => {
   if (requestPath === "/composer" || requestPath === "/composer/") {
     const body = fs.readFileSync(composerPath);
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/sequencer" || requestPath === "/sequencer/") {
+    const body = fs.readFileSync(composerPath);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/vendor/zustand/vanilla.mjs") {
+    const body = fs.readFileSync(zustandVanillaPath);
+    response.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "public, max-age=3600" });
     response.end(body);
     return;
   }

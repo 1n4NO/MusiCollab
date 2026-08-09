@@ -488,6 +488,9 @@ final class RootViewController: UIViewController {
             } else if eventType == "noteOn", let payload = message["payload"] as? [String: Any], let key = payload["key"] as? Int, (0..<8).contains(key) {
                 let rawVelocity = (payload["velocity"] as? Double ?? 0.86) * 127
                 let velocity = UInt8(max(1, min(127, Int(rawVelocity))))
+                if let instrument = payload["instrument"] as? String {
+                    self.audio.setInstrument(instrument, pitchSemitones: 0)
+                }
                 self.audio.triggerPiano(key: key, velocity: velocity)
                 DispatchQueue.main.async {
                     self.pianoButtons[key].backgroundColor = self.violet

@@ -14,8 +14,15 @@ async function get(path) {
 
 test("composer and companion routes serve usable HTML shells", async () => {
   const composer = await get("/composer");
+  const sequencer = await get("/sequencer");
   const companion = await get("/companion/");
   assert.equal(composer.response.status, 200);
+  assert.equal(sequencer.response.status, 200);
+  assert.match(sequencer.body, /MusiCollab Composer/);
+  assert.match(sequencer.body, /vendor\/zustand\/vanilla\.mjs/);
+  const zustand = await get("/vendor/zustand/vanilla.mjs");
+  assert.equal(zustand.response.status, 200);
+  assert.match(zustand.body, /createStore/);
   assert.match(composer.body, /MusiCollab Composer/);
   assert.match(composer.body, /Desktop monitor volume/);
   assert.match(composer.body, /location\.protocol === 'https:' \? 'wss' : 'ws'/);
@@ -38,6 +45,31 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(composer.body, /event\.key==='Escape'/);
   assert.match(composer.body, /function monitorRemoteEvent\(message\)/);
   assert.match(composer.body, /function emergencyStop\(\)/);
+  assert.match(composer.body, /function installSequencer\(\)/);
+  assert.match(composer.body, /function renderSequencer\(\)/);
+  assert.match(composer.body, /id="sequencerGrid"/);
+  assert.match(composer.body, /SEQUENCER/);
+  assert.match(composer.body, /function ensureMonitorAudio\(\)/);
+  assert.match(composer.body, /function playSequencerStep\(step\)/);
+  assert.match(composer.body, /id:'sample',name:'SLICES'/);
+  assert.match(composer.body, /function playSequencerSample\(\)/);
+  assert.match(composer.body, /id="sequencerOutput"/);
+  assert.match(composer.body, /id="sequencerDivision"/);
+  assert.match(composer.body, /value="connected">CONNECTED APP/);
+  assert.match(composer.body, /function sequencerDivisionLabel\(\)/);
+  assert.match(composer.body, /function sendSequencerNote\(row,step\)/);
+  assert.match(composer.body, /className='stepKey'/);
+  assert.match(composer.body, /sequencerStepKeys/);
+  assert.match(composer.body, /function setDesktopEffect\(name,value\)/);
+  assert.match(composer.body, /function toggleSequencerRecording\(\)/);
+  assert.match(composer.body, /function encodeWav\(chunks,sampleRate\)/);
+  assert.match(composer.body, /function addSequencerRow\(type\)/);
+  assert.match(composer.body, /function recordMobileSequencerEvent\(message\)/);
+  assert.match(composer.body, /instrument:'piano'/);
+  assert.match(composer.body, /instrument:'pad'/);
+  assert.match(composer.body, /instrument:'lead'/);
+  assert.match(composer.body, /instrument:'pluck'/);
+  assert.match(composer.body, /function playRemoteInstrumentNote\(message\)/);
   assert.match(composer.body, /audioContext\.resume\(\)/);
   assert.match(composer.body, /id="monitorMute"/);
   assert.match(composer.body, /id="panic"/);
@@ -91,7 +123,7 @@ test("companion PWA assets advertise landscape and versioned offline behavior", 
   assert.match(webMark.response.headers.get("content-type"), /image\/svg\+xml/);
   assert.match(webMark.body, /MusiCollab web mark/);
   assert.match(worker.response.headers.get("service-worker-allowed"), /\/companion\//);
-  assert.match(worker.body, /const APP_VERSION = '0\.1\.0'/);
+  assert.match(worker.body, /const APP_VERSION = '0\.1\.1'/);
   assert.match(worker.body, /musicollab-companion-v\$\{APP_VERSION\}/);
   assert.match(worker.body, /caches\.match/);
 });

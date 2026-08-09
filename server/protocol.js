@@ -3,6 +3,7 @@ export const PROTOCOL_VERSION = 1;
 export const VALID_ROLES = new Set(["composer", "performer", "companion"]);
 export const VALID_EVENT_TYPES = new Set([
   "padHit",
+  "noteOn",
   "trackControl",
   "transport",
   "queue",
@@ -13,7 +14,9 @@ export const VALID_EVENT_TYPES = new Set([
   "instrumentParam",
   "asset",
   "sliceMap",
-  "library"
+  "library",
+  "surface",
+  "rhythmGeneration"
 ]);
 export const VALID_QUANTIZATIONS = new Set(["immediate", "beat", "bar", "2bar"]);
 

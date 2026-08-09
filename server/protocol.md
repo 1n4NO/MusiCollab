@@ -8,13 +8,15 @@ Every server message includes `version: 1` and `type`. Client commands may inclu
 
 - `hello`: `{ room, clientID, name, role }`
 - `event`: `{ eventType, eventID?, requestID?, payload, beat?, targetServerTime?, targetBeat?, targetBar?, quantization? }`; transport payloads may use `action: "play" | "pause" | "stop"`, plus `bpm`, `beat`, `loopLengthBeats`, and `tempoPolicy: "preserve" | "reset"`
+- `surface` payloads select the companion surface: `{ target: "companion", surface: "queue" | "rhythm-generator" }`.
+- `rhythmGeneration` payloads carry local-generation state: `{ action: "start" | "preview" | "accept" | "discard", bpm, columns, pattern: { kick: number[], snare: number[], hat: number[] } }`. Audio remains local to the companion; `accept` is the handoff to the desktop sequencer.
 - `requestSnapshot`: `{ requestID? }`
 - `ping`: `{ clientTime? }`
 - `metrics`: `{ offsetMs, rttMs, jitterMs, lastSnapshotAt?, reconnectCount?, eventsSent?, eventsReceived?, eventsLost?, lastError? }`
 
 Valid roles: `composer`, `performer`, `companion`.
 
-Valid event types: `padHit`, `transport`, `queue`, `loops`, `sample`, `scene`, `instrument`, `instrumentParam`, `asset`, `sliceMap`, `library`.
+Valid event types: `padHit`, `noteOn`, `trackControl`, `transport`, `queue`, `loops`, `sample`, `scene`, `instrument`, `instrumentParam`, `asset`, `sliceMap`, `library`, `surface`, `rhythmGeneration`.
 
 Asset payloads use model version 1 and support `track`, `instrument`, `loop`, `sample`, `scene`, and `slice` records. New rooms include original generated demo content with license attribution; the room snapshot exposes all assets under `state.library`.
 

@@ -72,6 +72,27 @@ test("events expose client-to-server latency metadata", async () => {
   client.socket.close();
 });
 
+test("keyboard note events relay to the connected performer", async () => {
+  const composer = await connect("keyboard-source", "composer", "NOTE_TEST");
+  const performer = await connect("keyboard-performer", "performer", "NOTE_TEST");
+  composer.socket.send(JSON.stringify({ type: "event", eventType: "noteOn", payload: { instrument: "piano", key: 4, velocity: 0.86 } }));
+  const event = await new Promise((resolve) => {
+    const handler = (raw) => {
+      const message = JSON.parse(raw.toString());
+      if (message.type === "event" && message.eventType === "noteOn") {
+        performer.socket.off("message", handler);
+        resolve(message);
+      }
+    };
+    performer.socket.on("message", handler);
+  });
+  assert.equal(event.payload.instrument, "piano");
+  assert.equal(event.payload.key, 4);
+  assert.equal(event.payload.velocity, 0.86);
+  composer.socket.close();
+  performer.socket.close();
+});
+
 test("scene actions persist, validate references, and update room order", async () => {
   const library = createDemoLibrary();
   assert.equal(normalizeSceneAction({ action: "create", scene: { id: "scene-unit", name: "Unit", trackIDs: ["demo-track-drums"] } }, library).error, undefined);
