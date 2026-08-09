@@ -240,6 +240,14 @@
       state.playing = false;
       log('emergency stop — desktop monitor voices cleared');
     }
+    function monitorRemoteEvent(message){
+      if(!monitorEnabled||monitorMuted||!message||message.type!=='event')return;
+      if(message.eventType==='padHit')return; // The primary handler owns pad de-duplication.
+      if(message.eventType==='instrument')playMonitorTone(6);
+      if(message.eventType==='instrumentParam')playMonitorTone(7);
+      if(message.eventType==='loops')playMonitorTone(4);
+      if(message.eventType==='asset'&&message.payload?.asset?.type==='sample')playMonitorTone(5);
+    }
     function renderClients(list){rosterRoles=list.map(c=>c.role).filter(Boolean).sort(); clients.innerHTML = list.map(c => { const m=c.metrics||{}; const quality=Number.isFinite(m.offsetMs)?`±${Math.round(m.offsetMs)} / ${Math.round(m.rttMs)}ms / j${Math.round(m.jitterMs)}`:'sync pending'; const age=Number.isFinite(m.lastSnapshotAt)?` / snap ${Math.max(0,Math.round((Date.now()-m.lastSnapshotAt)/1000))}s`:' / snap —'; return `<div class="client"><span>${c.name}<br><small class="sub">${quality}${age}</small></span><span class="role">${c.role}</span></div>`; }).join('') || '<div class="sub">Waiting for clients…</div>'; }
     function scheduleReconnect(){
       if(reconnectTimer) return;
@@ -262,6 +270,7 @@
     }
     function connect(){
       ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+      ws.addEventListener('message',({data})=>{try{monitorRemoteEvent(JSON.parse(data))}catch{}});
       ws.addEventListener('open', () => {
         reconnectDelay=1000;
         connectionState='connected';

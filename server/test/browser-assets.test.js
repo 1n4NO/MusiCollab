@@ -36,6 +36,11 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(composer.body, /function resetComposerPrefs\(\)/);
   assert.match(composer.body, /event\.code==='Space'/);
   assert.match(composer.body, /event\.key==='Escape'/);
+  assert.match(composer.body, /function monitorRemoteEvent\(message\)/);
+  assert.match(composer.body, /function emergencyStop\(\)/);
+  assert.match(composer.body, /audioContext\.resume\(\)/);
+  assert.match(composer.body, /id="monitorMute"/);
+  assert.match(composer.body, /id="panic"/);
   assert.match(composer.body, /id="statusText"/);
   assert.match(composer.body, /role:'composer'/);
   assert.match(composer.body, /function scheduleReconnect\(\)/);
@@ -53,6 +58,12 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(companion.body, /manifest\.webmanifest/);
   assert.match(companion.body, /APPLY TO iPHONE 14/);
   assert.match(companion.body, /location\.protocol==='https:'\?'wss':'ws'/);
+  assert.match(companion.body, /id="queueList"/);
+  assert.match(companion.body, /data-action="up"/);
+  assert.match(companion.body, /id="pitch"/);
+  assert.match(companion.body, /min="-24" max="24"/);
+  assert.match(companion.body, /connectionState='reconnecting'/);
+  assert.match(companion.body, /function renderSample\(sample\)/);
 });
 
 test("companion PWA assets advertise landscape and versioned offline behavior", async () => {

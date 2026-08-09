@@ -12,7 +12,7 @@
 
 ## MC-045 — Companion WebSocket lifecycle
 
-- Priority: P0 · Status: in-progress · Dependencies: MC-002, MC-009, MC-043
+- Priority: P0 · Status: done · Dependencies: MC-002, MC-009, MC-043
 - Acceptance: Companion joins as `companion`, shows connecting/connected/reconnecting/offline states, and resumes state without refresh.
 
 ## MC-046 — Room code and QR join
@@ -22,12 +22,12 @@
 
 ## MC-047 — Queue up-next controls
 
-- Priority: P0 · Status: in-progress · Dependencies: MC-037, MC-045
+- Priority: P0 · Status: done · Dependencies: MC-037, MC-045
 - Acceptance: Companion can add, reorder, remove, and confirm the next track; commands are quantized and acknowledged.
 
 ## MC-048 — Waveform visualization
 
-- Priority: P1 · Status: in-progress · Dependencies: MC-045
+- Priority: P1 · Status: done · Dependencies: MC-045
 - Acceptance: Waveform metadata renders efficiently with loading, empty, unavailable, and long-sample states.
 
 ## MC-049 — Slice-boundary viewer
@@ -62,7 +62,7 @@
 
 ## MC-055 — Companion device test checklist
 
-- Priority: P0 · Status: planned · Dependencies: MC-045, MC-047, MC-049
+- Priority: P0 · Status: in-progress · Dependencies: MC-045, MC-047, MC-049
 - Acceptance: A repeatable real-device checklist covers join, queue, waveform, slice view, lock/unlock, Wi-Fi loss, and resume.
 
 ## MC-126 — Companion landscape-only guidance
@@ -77,5 +77,5 @@
 
 ## MC-128 — Companion performer instrument and pitch controls
 
-- Priority: P0 · Status: in-progress · Dependencies: MC-045, MC-047
+- Priority: P0 · Status: done · Dependencies: MC-045, MC-047
 - Acceptance: Companion can select drums, bass, keys, or sampler and send a bounded -24 to +24 semitone pitch setting to the iPhone 14 performer.

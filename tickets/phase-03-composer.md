@@ -77,12 +77,12 @@
 
 ## MC-123 — Desktop monitor audio engine
 
-- Priority: P1 · Status: in-progress · Dependencies: MC-122, MC-035
+- Priority: P1 · Status: done · Dependencies: MC-122, MC-035
 - Acceptance: Desktop can locally monitor selected drum, instrument, loop, and sample events without replacing the iPhone 14’s local performance path or sending raw audio over WebSocket.
 
 ## MC-124 — Desktop audio mixer and output safety
 
-- Priority: P1 · Status: in-progress · Dependencies: MC-123
+- Priority: P1 · Status: done · Dependencies: MC-123
 - Acceptance: Desktop monitor volume, mute, output-device failure, duplicate-trigger prevention, and an emergency stop are implemented and tested.
 
 ## MC-125 — Composer landscape-first layout
