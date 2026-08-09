@@ -2,8 +2,9 @@
 
 ## MC-098 — Release architecture review
 
-- Priority: P0 · Status: planned · Dependencies: MC-091
+- Priority: P0 · Status: done · Dependencies: MC-091
 - Acceptance: Data flow, trust boundaries, local-network assumptions, failure modes, and supported-device matrix are documented.
+- Delivered: Added the release architecture review covering three-client data flow, trust boundaries, LAN constraints, recovery behavior, and Mac/iPhone 14/iPhone 6 Plus support limits.
 
 ## MC-099 — Mac packaging and startup
 

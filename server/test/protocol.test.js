@@ -383,6 +383,14 @@ test("clients can publish drift metrics into the roster", async () => {
   client.socket.close();
 });
 
+test("server info exposes release metadata without session data", async () => {
+  const response = await fetch(`http://127.0.0.1:${port}/info`);
+  const info = await response.json();
+  assert.equal(info.appVersion, "0.1.0");
+  assert.equal(info.protocolVersion, 1);
+  assert.equal(Object.hasOwn(info, "sessionToken"), false);
+});
+
 test("three-client clock simulation stays converged during playback", async () => {
   const clients = await Promise.all([
     connect("accuracy-composer", "composer"),

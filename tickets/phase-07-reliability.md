@@ -74,5 +74,6 @@
 
 ## MC-097 — Diagnostics export
 
-- Priority: P1 · Status: planned · Dependencies: MC-093
+- Priority: P1 · Status: done · Dependencies: MC-093
 - Acceptance: Mac exports redacted session diagnostics with app version, protocol version, timings, and errors.
+- Delivered: Hardened the Composer export into a bounded, versioned, redacted diagnostics artifact with app/protocol metadata, server authority, role-only roster, timing history, reconnect/error data, and explicit privacy exclusions.

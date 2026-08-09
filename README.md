@@ -43,3 +43,4 @@ events—not streaming raw audio between phones.
 - [Client architecture](./architecture.md)
 - [Implementation phases](./phases/)
 - [GUI mockup](./Mockup.html)
+- [Landscape-only policy](./tests/LANDSCAPE_POLICY.md)

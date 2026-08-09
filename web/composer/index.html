@@ -37,7 +37,8 @@
       try { await navigator.clipboard.writeText(joinURL()); button.textContent = 'COPIED'; setTimeout(() => button.textContent = 'COPY JOIN LINK', 1200); }
       catch { button.textContent = 'COPY UNAVAILABLE'; setTimeout(() => button.textContent = 'COPY JOIN LINK', 1600); }
     };
-    fetch('/info').then(response => response.json()).then(info => {
+    let serverInfo = null;
+    fetch('/info').then(response => response.json()).then(info => { serverInfo=info;
       const joinInfo = document.querySelector('#joinInfo');
       joinInfo.textContent = info.composerURL ? `JOIN ${info.composerURL}?room=${encodeURIComponent(room)}` : 'LAN address unavailable';
     }).catch(() => { document.querySelector('#joinInfo').textContent = 'LAN address unavailable'; });
@@ -55,6 +56,8 @@
     const seenEventIDs = new Set();
     const pendingCommands = new Map();
     const diagnostics = { rttMs:null, jitterMs:null, reconnectCount:0, eventsSent:0, eventsReceived:0, eventsLost:0, lastError:null, lastUpdatedAt:null };
+    const diagnosticsHistory = [];
+    let rosterRoles = [];
     let highestEventSequence = 0;
     let connectionState = 'connecting';
     let lastSnapshotAt = 0;
@@ -77,9 +80,9 @@
     const networkDiagnostics = document.querySelector('#networkDiagnostics');
     function log(message){ events.textContent = `${new Date().toLocaleTimeString()}  ${message}\n` + events.textContent; }
     function updateConnectionStatus(){const stale=lastSnapshotAt>0&&Date.now()-lastSnapshotAt>6000;statusText.textContent=connectionState==='connected'?`${stale?'stale · ':''}connected${pendingCommands.size?` · ${pendingCommands.size} pending`:''}`:connectionState;statusDot.classList.toggle('connected',connectionState==='connected'&&!stale)}
-    function renderDiagnostics(){const rtt=Number.isFinite(diagnostics.rttMs)?`${Math.round(diagnostics.rttMs)} ms`:'—',jitter=Number.isFinite(diagnostics.jitterMs)?`${Math.round(diagnostics.jitterMs)} ms`:'—',error=diagnostics.lastError||'—';networkDiagnostics.textContent=`RTT ${rtt} · JITTER ${jitter} · EVENT LOSS ${diagnostics.eventsLost} · RECONNECTS ${diagnostics.reconnectCount} · LAST ERROR ${error}`}
+    function renderDiagnostics(){const rtt=Number.isFinite(diagnostics.rttMs)?`${Math.round(diagnostics.rttMs)} ms`:'—',jitter=Number.isFinite(diagnostics.jitterMs)?`${Math.round(diagnostics.jitterMs)} ms`:'—',error=diagnostics.lastError||'—';networkDiagnostics.textContent=`RTT ${rtt} · JITTER ${jitter} · EVENT LOSS ${diagnostics.eventsLost} · RECONNECTS ${diagnostics.reconnectCount} · LAST ERROR ${error}`;diagnosticsHistory.push({at:new Date().toISOString(),rttMs:diagnostics.rttMs,jitterMs:diagnostics.jitterMs,reconnectCount:diagnostics.reconnectCount,eventsSent:diagnostics.eventsSent,eventsReceived:diagnostics.eventsReceived,eventsLost:diagnostics.eventsLost,lastError:diagnostics.lastError});if(diagnosticsHistory.length>120)diagnosticsHistory.shift()}
     function sendNetworkMetrics(){if(ws?.readyState!==WebSocket.OPEN)return;ws.send(JSON.stringify({type:'metrics',offsetMs:Number(previousClockOffset)||0,rttMs:Number(diagnostics.rttMs)||0,jitterMs:Number(diagnostics.jitterMs)||0,lastSnapshotAt:Date.now(),reconnectCount:diagnostics.reconnectCount,eventsSent:diagnostics.eventsSent,eventsReceived:diagnostics.eventsReceived,eventsLost:diagnostics.eventsLost,lastError:diagnostics.lastError||''}))}
-    function exportDiagnostics(){const report={app:'MusiCollab Composer',protocolVersion:1,room,serverInstanceID,exportedAt:new Date().toISOString(),connectionState,diagnostics:{...diagnostics,pendingCommands:pendingCommands.size}};const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`musicollab-network-${Date.now()}.json`;link.click();URL.revokeObjectURL(url)}
+    function exportDiagnostics(){const report={schemaVersion:1,redaction:'No session tokens, event payloads, sample paths, or client names are included.',app:{name:'MusiCollab Composer',version:serverInfo?.appVersion||'0.1.0',platform:'macOS browser',protocolVersion:serverInfo?.protocolVersion||1},exportedAt:new Date().toISOString(),connection:{state:connectionState,serverInstanceID,host:location.hostname,port:location.port||'default'},room:'[redacted]',rosterRoles:[...rosterRoles],diagnostics:{...diagnostics,pendingCommands:pendingCommands.size},history:diagnosticsHistory.slice(-120)};const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`musicollab-diagnostics-${Date.now()}.json`;link.click();URL.revokeObjectURL(url)}
     function send(eventType, payload){const command={eventType,payload,eventID:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,requestID:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,attempts:0,timer:null};pendingCommands.set(command.requestID,command);dispatchCommand(command);return command.requestID}
     function dispatchCommand(command){if(!pendingCommands.has(command.requestID))return;if(command.attempts>=4){pendingCommands.delete(command.requestID);diagnostics.lastError=`${command.eventType} delivery failed`;renderDiagnostics();sendNetworkMetrics();log(`${command.eventType} failed after 4 delivery attempts`);return}if(ws?.readyState===WebSocket.OPEN){ws.send(JSON.stringify({type:'event',eventType:command.eventType,payload:command.payload,eventID:command.eventID,requestID:command.requestID,clientSentAt:Date.now()}));command.attempts++;diagnostics.eventsSent++;diagnostics.lastUpdatedAt=Date.now();renderDiagnostics()}clearTimeout(command.timer);command.timer=setTimeout(()=>dispatchCommand(command),700)}
     function retryPendingCommands(){pendingCommands.forEach(dispatchCommand)}
@@ -211,7 +214,7 @@
       state.playing = false;
       log('emergency stop — desktop monitor voices cleared');
     }
-    function renderClients(list){ clients.innerHTML = list.map(c => { const m=c.metrics||{}; const quality=Number.isFinite(m.offsetMs)?`±${Math.round(m.offsetMs)} / ${Math.round(m.rttMs)}ms / j${Math.round(m.jitterMs)}`:'sync pending'; const age=Number.isFinite(m.lastSnapshotAt)?` / snap ${Math.max(0,Math.round((Date.now()-m.lastSnapshotAt)/1000))}s`:' / snap —'; return `<div class="client"><span>${c.name}<br><small class="sub">${quality}${age}</small></span><span class="role">${c.role}</span></div>`; }).join('') || '<div class="sub">Waiting for clients…</div>'; }
+    function renderClients(list){rosterRoles=list.map(c=>c.role).filter(Boolean).sort(); clients.innerHTML = list.map(c => { const m=c.metrics||{}; const quality=Number.isFinite(m.offsetMs)?`±${Math.round(m.offsetMs)} / ${Math.round(m.rttMs)}ms / j${Math.round(m.jitterMs)}`:'sync pending'; const age=Number.isFinite(m.lastSnapshotAt)?` / snap ${Math.max(0,Math.round((Date.now()-m.lastSnapshotAt)/1000))}s`:' / snap —'; return `<div class="client"><span>${c.name}<br><small class="sub">${quality}${age}</small></span><span class="role">${c.role}</span></div>`; }).join('') || '<div class="sub">Waiting for clients…</div>'; }
     function scheduleReconnect(){
       if(reconnectTimer) return;
       connectionState='reconnecting';

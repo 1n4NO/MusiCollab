@@ -72,10 +72,12 @@
 
 ## MC-015 — Three-client smoke test
 
-- Priority: P0 · Status: planned · Dependencies: MC-007, MC-008, MC-009, MC-011
+- Priority: P0 · Status: done · Dependencies: MC-007, MC-008, MC-009, MC-011
 - Acceptance: Mac, iPhone 14, and iPhone 6 Plus join one room, appear in the roster, exchange a test event, and recover after one reconnect.
+- Delivered: Added an automated three-role smoke test covering roster convergence, pad-event relay, session-token reconnect, clean snapshot recovery, and duplicate-role prevention.
 
 ## MC-119 — Define landscape-only product policy
 
-- Priority: P0 · Status: planned · Dependencies: MC-004
+- Priority: P0 · Status: done · Dependencies: MC-004
 - Acceptance: Supported orientation is documented for the iPhone 14 app, iPhone 6 Plus companion, and desktop composer; portrait behavior and user guidance are explicitly defined.
+- Delivered: Added the landscape-only policy for the native app, companion PWA, and Composer, including portrait guidance and session-preservation requirements.

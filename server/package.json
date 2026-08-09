@@ -8,7 +8,8 @@
     "start:lan": "./start.sh",
     "test": "node --test --test-concurrency=1 test/protocol.test.js",
     "test:network": "node --test --test-concurrency=1 test/network-interruption.test.js",
-    "test:soak": "node --test --test-concurrency=1 test/soak.test.js"
+    "test:soak": "node --test --test-concurrency=1 test/soak.test.js",
+    "test:smoke": "node --test --test-concurrency=1 test/three-client-smoke.test.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

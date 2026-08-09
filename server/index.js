@@ -12,6 +12,7 @@ import { normalizeInstrumentParameter, normalizeInstrumentSelection } from "./in
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
+const APP_VERSION = "0.1.0";
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.html");
 const companionPath = path.join(serverDirectory, "..", "web", "companion", "index.html");
@@ -568,7 +569,7 @@ const httpServer = http.createServer((request, response) => {
   }
   if (requestPath === "/info") {
     const address = lanAddress();
-    const body = JSON.stringify({ protocolVersion: PROTOCOL_VERSION, room: "LOCAL", lanAddress: address, composerURL: address ? `http://${address}:${PORT}/composer` : null, websocketURL: address ? `ws://${address}:${PORT}/ws` : null });
+    const body = JSON.stringify({ appVersion: APP_VERSION, protocolVersion: PROTOCOL_VERSION, room: "LOCAL", lanAddress: address, composerURL: address ? `http://${address}:${PORT}/composer` : null, websocketURL: address ? `ws://${address}:${PORT}/ws` : null });
     response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
     response.end(body);
     return;

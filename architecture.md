@@ -63,3 +63,7 @@ low-latency instruments    queue, waveform, arrangement controls
 Synchronize events and metadata, never raw audio. Each client owns its local
 audio rendering. For the first version, run the WebSocket server on the Mac and
 keep all devices on the same Wi-Fi network.
+
+See [RELEASE_ARCHITECTURE_REVIEW.md](./RELEASE_ARCHITECTURE_REVIEW.md) for the
+trust boundaries, failure-mode recovery, LAN assumptions, and supported-device
+matrix used for release planning.
