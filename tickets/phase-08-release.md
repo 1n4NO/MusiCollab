@@ -68,8 +68,9 @@
 
 ## MC-109 — Browser compatibility test suite
 
-- Priority: P0 · Status: planned · Dependencies: MC-044, MC-102
+- Priority: P0 · Status: in progress · Dependencies: MC-044, MC-102
 - Acceptance: Composer browsers and iPhone 6 Plus Safari are tested for loading, WebSocket, layout, audio-free companion behavior, and reconnect.
+- Delivered: Added browser/PWA asset tests to the automated suite, verified the live Composer and Companion at a 736×414 landscape viewport with no browser console warnings, and documented the Safari/Chromium/iPhone 6 Plus manual compatibility matrix in `tests/BROWSER_COMPATIBILITY.md`. Physical iPhone 6 Plus Safari verification remains pending.
 
 ## MC-110 — Audio and sample fixture suite
 

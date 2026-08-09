@@ -230,6 +230,10 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
                     }
                     self.receiveNext()
                 case .failure(let error):
+                    if (error as NSError).domain == NSURLErrorDomain,
+                       (error as NSError).code == NSURLErrorCancelled {
+                        return
+                    }
                     MusiCollabDiagnostics.error("WebSocket receive failed: \(error.localizedDescription)")
                     self.task = nil
                     self.onConnectionChanged?(false)
@@ -258,6 +262,10 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
         guard JSONSerialization.isValidJSONObject(hello), let data = try? JSONSerialization.data(withJSONObject: hello), let text = String(data: data, encoding: .utf8) else { return }
         task.send(.string(text)) { [weak self] error in
             guard let self, let error else { return }
+            if (error as NSError).domain == NSURLErrorDomain,
+               (error as NSError).code == NSURLErrorCancelled {
+                return
+            }
             MusiCollabDiagnostics.error("Session hello failed: \(error.localizedDescription)")
             guard attempt < 3, !self.suspended else {
                 self.onHandshake?(false, "hello failed")

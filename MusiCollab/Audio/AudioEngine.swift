@@ -24,6 +24,7 @@ final class AudioEngine: InstrumentVoice {
     private var trackVolume = 1.0
     private var trackMuted = false
     private var soloTrackID: String?
+    private var isStarting = false
 
     init() {
         // Two voices per pad allow a fast retrigger to overlap naturally instead
@@ -47,16 +48,39 @@ final class AudioEngine: InstrumentVoice {
     }
 
     func start() {
+        guard !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
+
         do {
-            try audioSession.setCategory(.playback, mode: .default, options: [.allowBluetoothA2DP])
+            // Plain playback is the reliable route on this device. iOS can
+            // still route playback to an attached output when available.
+            try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try audioSession.setActive(true)
-            if !engine.isRunning {
-                try engine.start()
-            }
+            try startEngine()
             postStatus("Audio ready")
         } catch {
-            postStatus("Audio unavailable — tap a pad to retry")
-            print("MusiCollab audio start failed: \(error.localizedDescription)")
+            // Retry once without mixing if another audio session owns the
+            // route. This is a real failure and is kept visible in diagnostics.
+            MusiCollabDiagnostics.warning("Audio route setup failed; retrying exclusive playback: \(error.localizedDescription)")
+            do {
+                engine.reset()
+                try audioSession.setCategory(.playback, mode: .default, options: [])
+                try audioSession.setActive(true)
+                try startEngine()
+                postStatus("Audio ready")
+            } catch {
+                postStatus("Audio unavailable — check the phone output route")
+                MusiCollabDiagnostics.error("Audio start failed after route fallback: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func startEngine() throws {
+        engine.mainMixerNode.outputVolume = 1
+        engine.prepare()
+        if !engine.isRunning {
+            try engine.start()
         }
     }
 
@@ -107,6 +131,16 @@ final class AudioEngine: InstrumentVoice {
     }
 
     func trigger(note: UInt8, velocity: UInt8 = 110) {
+        // Audio activation can fail during app launch while the device is
+        // changing route or returning from an interruption. Retry at the
+        // moment of user intent instead of silently dropping the first hit.
+        if !engine.isRunning {
+            start()
+        }
+        guard engine.isRunning else {
+            postStatus("Audio unavailable — check the phone output route")
+            return
+        }
         guard !trackMuted, soloTrackID == nil || soloTrackID == "drums" else { return }
         let padIndex = Int(note >= 36 ? note - 36 : note) % 8
         let buffer = drumBuffers[note] ?? makeDrumBuffer(note: note, velocity: velocity)

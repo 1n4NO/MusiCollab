@@ -53,6 +53,10 @@ final class RootViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(handleAudioStatus(_:)), name: .musiCollabAudioStatus, object: audio)
         buildInterface()
         connectToSessionServer()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
         audio.start()
     }
 
@@ -78,12 +82,18 @@ final class RootViewController: UIViewController {
     }
 
     private func buildInterface() {
+        // The performer surface is intentionally edge-to-edge in landscape.
+        // Keep the safe area from adding invisible gutters around the root view.
+        view.insetsLayoutMarginsFromSafeArea = false
+
         let scroll = UIScrollView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.contentInsetAdjustmentBehavior = .never
+        scroll.contentInset = .zero
+        scroll.scrollIndicatorInsets = .zero
         view.addSubview(scroll)
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.topAnchor.constraint(equalTo: view.topAnchor),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -181,6 +191,10 @@ final class RootViewController: UIViewController {
                 button.isMultipleTouchEnabled = true
                 button.isExclusiveTouch = false
                 button.addTarget(self, action: #selector(hitPad(_:)), for: .touchDown)
+                // Some iOS gesture/scroll states can deliver touchUpInside
+                // without the initial touchDown. Keep a reliable tap fallback
+                // so the pad still produces haptics and local audio.
+                button.addTarget(self, action: #selector(tapPad(_:)), for: .touchUpInside)
                 button.addTarget(self, action: #selector(releasePad(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
                 rowStack.addArrangedSubview(button)
                 padButtons.append(button)
@@ -562,6 +576,11 @@ final class RootViewController: UIViewController {
     @objc private func releasePad(_ sender: UIButton) {
         activePadTouches.remove(sender.tag)
         sender.accessibilityValue = "Ready"
+    }
+
+    @objc private func tapPad(_ sender: UIButton) {
+        guard !activePadTouches.contains(sender.tag) else { return }
+        hitPad(sender)
     }
 
     private func flashPad(_ index: Int) {
