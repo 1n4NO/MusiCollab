@@ -1,0 +1,10 @@
+/companion/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/companion/manifest.webmanifest
+  Cache-Control: no-cache, must-revalidate
+
+/companion/*
+  Cache-Control: public, max-age=60, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer

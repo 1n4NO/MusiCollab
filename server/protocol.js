@@ -3,6 +3,7 @@ export const PROTOCOL_VERSION = 1;
 export const VALID_ROLES = new Set(["composer", "performer", "companion"]);
 export const VALID_EVENT_TYPES = new Set([
   "padHit",
+  "trackControl",
   "transport",
   "queue",
   "loops",

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SERVER_DIR="$PROJECT_DIR/server"
+SOAK_DURATION_SECONDS="${SOAK_DURATION_SECONDS:-10}"
+
+command -v node >/dev/null 2>&1 || { echo "Node.js is required." >&2; exit 1; }
+command -v npm >/dev/null 2>&1 || { echo "npm is required." >&2; exit 1; }
+
+run_suite() {
+  local name="$1"
+  shift
+  echo
+  echo "=== $name ==="
+  (cd "$SERVER_DIR" && PORT=0 "$@")
+}
+
+run_suite "Protocol and model tests" npm test
+run_suite "Network interruption and resumption" npm run test:network
+run_suite "Three-client smoke test" npm run test:smoke
+echo
+echo "=== Three-client soak (${SOAK_DURATION_SECONDS}s) ==="
+(cd "$SERVER_DIR" && PORT=0 SOAK_DURATION_SECONDS="$SOAK_DURATION_SECONDS" npm run test:soak)
+
+echo
+echo "All MusiCollab automated suites passed."

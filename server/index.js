@@ -1,4 +1,5 @@
 import http from "node:http";
+import https from "node:https";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,6 +13,12 @@ import { normalizeInstrumentParameter, normalizeInstrumentSelection } from "./in
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
+const TLS_KEY_PATH = process.env.MUSICOLLAB_TLS_KEY || "";
+const TLS_CERT_PATH = process.env.MUSICOLLAB_TLS_CERT || "";
+const TLS_ENABLED = Boolean(TLS_KEY_PATH || TLS_CERT_PATH);
+if (TLS_ENABLED && (!TLS_KEY_PATH || !TLS_CERT_PATH)) {
+  throw new Error("MUSICOLLAB_TLS_KEY and MUSICOLLAB_TLS_CERT must be provided together.");
+}
 const APP_VERSION = "0.1.0";
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.html");
@@ -29,6 +36,29 @@ const DEFAULT_LOOP_LENGTH_BEATS = 16;
 const VALID_TEMPO_POLICIES = new Set(["preserve", "reset"]);
 const LATE_EVENT_GRACE_MS = 100;
 const LATE_BEAT_GRACE = 0.25;
+
+function normalizeTrackControl(payload, currentTracks) {
+  const trackID = typeof payload.trackID === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(payload.trackID) ? payload.trackID : null;
+  if (!trackID) return { error: "trackControl.trackID is required." };
+  const current = currentTracks[trackID] || { trackID, name: trackID, volume: 1, mute: false, solo: false, arm: false, instrumentID: "drums" };
+  const next = { ...current, trackID };
+  if (payload.volume !== undefined) {
+    const volume = Number(payload.volume);
+    if (!Number.isFinite(volume)) return { error: "trackControl.volume must be a number." };
+    next.volume = Math.max(0, Math.min(1, volume));
+  }
+  for (const key of ["mute", "solo", "arm"]) {
+    if (payload[key] !== undefined) {
+      if (typeof payload[key] !== "boolean") return { error: `trackControl.${key} must be boolean.` };
+      next[key] = payload[key];
+    }
+  }
+  if (payload.instrumentID !== undefined) {
+    if (typeof payload.instrumentID !== "string" || !/^[A-Za-z0-9._:-]{1,80}$/.test(payload.instrumentID)) return { error: "trackControl.instrumentID is invalid." };
+    next.instrumentID = payload.instrumentID;
+  }
+  return { value: next };
+}
 
 function transportSnapshot(transport) {
   return {
@@ -124,6 +154,7 @@ function createRoom(roomID) {
       queue: [],
       loops: [],
       instrument: { instrumentID: "drums", instrument: "drums", name: "Drums", family: "percussion", engine: "abstract", parameters: { voiceCount: 8, character: 0.35 }, pitch: 0 },
+      tracks: { drums: { trackID: "drums", name: "Drum Kit", volume: 1, mute: false, solo: false, arm: true, instrumentID: "drums" } },
       sample: null,
       scene: { sceneID: "demo-scene-default" },
       sceneOrder: library.scenes.map((scene) => scene.id),
@@ -336,6 +367,15 @@ function applyEvent(room, client, input) {
     event.payload = { ...result.value, targetBeat: event.timing.targetBeat };
     room.state.instrument = { ...room.state.instrument, parameters: result.value.parameters };
   }
+  if (eventType === "trackControl") {
+    const result = normalizeTrackControl(payload, room.state.tracks);
+    if (result.error) {
+      send(client.socket, errorMessage("INVALID_TRACK_CONTROL", result.error, input.requestID ?? null));
+      return;
+    }
+    event.payload = result.value;
+    room.state.tracks[result.value.trackID] = result.value;
+  }
   if (eventType === "scene") {
     const result = normalizeSceneAction(payload, room.state.library);
     if (result.error) {
@@ -535,7 +575,7 @@ function lanAddress() {
   return null;
 }
 
-const httpServer = http.createServer((request, response) => {
+const requestHandler = (request, response) => {
   const requestPath = new URL(request.url, "http://localhost").pathname;
   if (requestPath === "/composer" || requestPath === "/composer/") {
     const body = fs.readFileSync(composerPath);
@@ -569,14 +609,20 @@ const httpServer = http.createServer((request, response) => {
   }
   if (requestPath === "/info") {
     const address = lanAddress();
-    const body = JSON.stringify({ appVersion: APP_VERSION, protocolVersion: PROTOCOL_VERSION, room: "LOCAL", lanAddress: address, composerURL: address ? `http://${address}:${PORT}/composer` : null, websocketURL: address ? `ws://${address}:${PORT}/ws` : null });
+    const scheme = TLS_ENABLED ? "https" : "http";
+    const socketScheme = TLS_ENABLED ? "wss" : "ws";
+    const body = JSON.stringify({ appVersion: APP_VERSION, protocolVersion: PROTOCOL_VERSION, room: "LOCAL", secure: TLS_ENABLED, lanAddress: address, composerURL: address ? `${scheme}://${address}:${PORT}/composer` : null, websocketURL: address ? `${socketScheme}://${address}:${PORT}/ws` : null });
     response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
     response.end(body);
     return;
   }
   response.writeHead(404, { "content-type": "text/plain" });
   response.end("MusiCollab session server\n");
-});
+};
+
+const httpServer = TLS_ENABLED
+  ? https.createServer({ key: fs.readFileSync(TLS_KEY_PATH), cert: fs.readFileSync(TLS_CERT_PATH) }, requestHandler)
+  : http.createServer(requestHandler);
 
 const websocketServer = new WebSocketServer({ server: httpServer, path: "/ws" });
 
@@ -610,8 +656,10 @@ const heartbeat = setInterval(() => runHeartbeat(websocketServer.clients), 20_00
 const clockTimer = setInterval(broadcastClock, 100);
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`MusiCollab session server listening on http://127.0.0.1:${PORT}`);
-  console.log(`WebSocket endpoint: ws://127.0.0.1:${PORT}/ws`);
+  const scheme = TLS_ENABLED ? "https" : "http";
+  const socketScheme = TLS_ENABLED ? "wss" : "ws";
+  console.log(`MusiCollab session server listening on ${scheme}://127.0.0.1:${PORT}`);
+  console.log(`WebSocket endpoint: ${socketScheme}://127.0.0.1:${PORT}/ws`);
 });
 
 function shutdown() {

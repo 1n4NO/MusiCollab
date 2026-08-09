@@ -30,6 +30,8 @@ Sample metadata is control-plane data only. A normalized sample may include `dur
 
 `instrumentParam` payloads use `{ instrumentID, parameter, value }` and are normalized into a snapshot-safe parameter map with `automation: "step"` and the target beat. Reconnecting clients receive the latest complete parameter map from `state.instrument`.
 
+`trackControl` payloads use `{ trackID, volume?, mute?, solo?, arm?, instrumentID? }`. Volume is clamped to 0…1, booleans are validated, and unspecified fields retain their current value. The authoritative values persist under `state.tracks`.
+
 `scene` payloads use actions: `create`/`save` with a validated scene record, `rename` with `sceneID` and `name`, `duplicate` with `sceneID` and `newID`, `reorder` with a complete `order`, or `recall` with `sceneID`. The server persists the scene library, active scene, and `sceneOrder` in snapshots and rejects missing or invalid track references.
 
 `library` payloads use `favorite`, `tags`, `missing`, or `recover` actions with an `assetID`. Favorite state, normalized tags, and missing-file state persist in room snapshots. Clients should offer recovery by re-importing the original file or restoring a valid transfer reference; the `recover` action clears the missing marker after that recovery.

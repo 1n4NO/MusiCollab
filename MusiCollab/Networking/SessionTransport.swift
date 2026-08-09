@@ -4,8 +4,11 @@ import Network
 protocol SessionTransport: AnyObject {
     var onMessage: (([String: Any]) -> Void)? { get set }
     var onConnectionChanged: ((Bool) -> Void)? { get set }
+    var onHandshake: ((Bool, String) -> Void)? { get set }
+    var onStatus: ((String) -> Void)? { get set }
     func connect(room: String, clientID: String, name: String, role: String)
     func send(eventType: String, payload: [String: Any])
+    func cancelPending(eventTypes: Set<String>)
     func resync()
     func suspend()
     func resume()
@@ -15,6 +18,8 @@ protocol SessionTransport: AnyObject {
 final class SessionWebSocketClient: NSObject, SessionTransport {
     var onMessage: (([String: Any]) -> Void)?
     var onConnectionChanged: ((Bool) -> Void)?
+    var onHandshake: ((Bool, String) -> Void)?
+    var onStatus: ((String) -> Void)?
     var onClockQuality: ((Int, Int) -> Void)?
 
     private var task: URLSessionWebSocketTask?
@@ -33,6 +38,8 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
     private var pendingCommands: [String: (eventType: String, payload: [String: Any], eventID: String, attempts: Int)] = [:]
     private var suspended = false
     private var serverInstanceID: String?
+    private var handshakeComplete = false
+    private var helloRetryWorkItem: DispatchWorkItem?
 
     init(url: URL) {
         self.url = url
@@ -43,7 +50,10 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
             DispatchQueue.main.async {
                 guard let self else { return }
                 if path.status == .satisfied && !self.suspended { self.scheduleRetry() }
-                if path.status != .satisfied { self.onConnectionChanged?(false) }
+                if path.status != .satisfied {
+                    self.onConnectionChanged?(false)
+                    self.onStatus?("offline — check Wi‑Fi and server")
+                }
             }
         }
         pathMonitor.start(queue: pathQueue)
@@ -55,24 +65,31 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
         suspended = false
         connectionDetails = (room, clientID, name, role)
         retryWorkItem?.cancel()
+        helloRetryWorkItem?.cancel()
         task?.cancel(with: .goingAway, reason: nil)
         clockSyncTimer?.invalidate()
+        handshakeComplete = false
+        onHandshake?(false, "connecting")
         task = session.webSocketTask(with: url)
         task?.resume()
-        var hello: [String: Any] = ["type": "hello", "room": room, "clientID": clientID, "name": name, "role": role]
-        if let sessionToken { hello["sessionToken"] = sessionToken }
-        sendJSON(hello)
         clockSyncTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.sendClockPing()
         }
-        sendClockPing()
         receiveNext()
+        sendHello(attempt: 0)
     }
 
     func send(eventType: String, payload: [String: Any]) {
+        if ["transport", "trackControl", "instrument", "instrumentParam"].contains(eventType) {
+            pendingCommands = pendingCommands.filter { $0.value.eventType != eventType }
+        }
         let requestID = UUID().uuidString
         pendingCommands[requestID] = (eventType: eventType, payload: payload, eventID: UUID().uuidString, attempts: 0)
         dispatchCommand(requestID)
+    }
+
+    func cancelPending(eventTypes: Set<String>) {
+        pendingCommands = pendingCommands.filter { !eventTypes.contains($0.value.eventType) }
     }
 
     func resync() {
@@ -92,6 +109,8 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
         clockSyncTimer = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+        handshakeComplete = false
+        onHandshake?(false, "suspended")
         onConnectionChanged?(false)
     }
 
@@ -105,7 +124,8 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
         guard JSONSerialization.isValidJSONObject(object), let data = try? JSONSerialization.data(withJSONObject: object), let text = String(data: data, encoding: .utf8) else { return }
         task?.send(.string(text)) { [weak self] error in
             guard let error else { return }
-            print("MusiCollab WebSocket send failed: \(error.localizedDescription)")
+            MusiCollabDiagnostics.error("WebSocket send failed: \(error.localizedDescription)")
+            self?.onStatus?("send failed — retrying")
             self?.task = nil
             self?.scheduleRetry()
         }
@@ -115,16 +135,21 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
         guard var command = pendingCommands[requestID] else { return }
         guard command.attempts < 4 else {
             pendingCommands.removeValue(forKey: requestID)
-            print("MusiCollab command failed after 4 delivery attempts: \(command.eventType)")
+            MusiCollabDiagnostics.error("Command delivery failed after four attempts: \(command.eventType)")
+            onStatus?("delivery failed — retry \(command.eventType)")
             return
         }
-        guard task != nil else {
+        guard task != nil, handshakeComplete else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in self?.dispatchCommand(requestID) }
             return
         }
         command.attempts += 1
         pendingCommands[requestID] = command
-        sendJSON(["type": "event", "eventType": command.eventType, "eventID": command.eventID, "requestID": requestID, "clientSentAt": Date().timeIntervalSince1970 * 1000, "payload": command.payload])
+        var event: [String: Any] = ["type": "event", "eventType": command.eventType, "eventID": command.eventID, "requestID": requestID, "clientSentAt": Date().timeIntervalSince1970 * 1000, "payload": command.payload]
+        if command.eventType == "padHit", let beat = command.payload["beat"] as? Double {
+            event["beat"] = beat
+        }
+        sendJSON(event)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in self?.dispatchCommand(requestID) }
     }
 
@@ -135,15 +160,26 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
                 switch result {
                 case .success(let message):
                     self.retryDelay = 1
-                    self.onConnectionChanged?(true)
                     if case .string(let text) = message, let data = text.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                         if object["type"] as? String == "welcome" {
+                            let expectedRole = self.connectionDetails?.role ?? "performer"
+                            guard object["role"] as? String == expectedRole else {
+                                self.onHandshake?(false, "server rejected performer role")
+                                self.task?.cancel(with: .protocolError, reason: nil)
+                                self.task = nil
+                                self.scheduleRetry()
+                                return
+                            }
+                            self.handshakeComplete = true
+                            self.onConnectionChanged?(true)
+                            self.onHandshake?(true, "welcome received")
                             if let instance = object["serverInstanceID"] as? String {
                                 if let previous = self.serverInstanceID, previous != instance {
                                     self.clockSamples.removeAll()
                                     self.previousBestOffset = nil
                                     self.pendingCommands = self.pendingCommands.mapValues { (eventType: $0.eventType, payload: $0.payload, eventID: $0.eventID, attempts: 0) }
-                                    print("MusiCollab server restart detected; awaiting clean snapshot")
+                                    MusiCollabDiagnostics.warning("Server restart detected; awaiting clean snapshot")
+                                    self.onStatus?("server restarted — resyncing")
                                 }
                                 self.serverInstanceID = instance
                             }
@@ -151,7 +187,22 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
                                 self.sessionToken = token
                                 UserDefaults.standard.set(token, forKey: "musicollab.sessionToken")
                             }
+                            if object["serverRestarted"] as? Bool == true {
+                                self.onStatus?("stale session — snapshot resyncing")
+                            }
                             self.pendingCommands.keys.forEach { self.dispatchCommand($0) }
+                            self.sendClockPing()
+                        }
+                        if object["type"] as? String == "snapshot" && self.handshakeComplete {
+                            self.onHandshake?(true, "snapshot received")
+                        }
+                        if object["type"] as? String == "roster" && self.handshakeComplete {
+                            self.onHandshake?(true, "roster received")
+                        }
+                        if object["type"] as? String == "error" {
+                            let code = object["code"] as? String ?? "SERVER_ERROR"
+                            let message = object["message"] as? String ?? "The server rejected the request."
+                            self.onStatus?("\(code) — \(message)")
                         }
                         if let requestID = object["requestID"] as? String, object["type"] as? String == "ack" || object["type"] as? String == "error" {
                             self.pendingCommands.removeValue(forKey: requestID)
@@ -179,9 +230,10 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
                     }
                     self.receiveNext()
                 case .failure(let error):
-                    print("MusiCollab WebSocket receive failed: \(error.localizedDescription)")
+                    MusiCollabDiagnostics.error("WebSocket receive failed: \(error.localizedDescription)")
                     self.task = nil
                     self.onConnectionChanged?(false)
+                    self.onStatus?("connection lost — retrying")
                     self.scheduleRetry()
                 }
             }
@@ -189,8 +241,34 @@ final class SessionWebSocketClient: NSObject, SessionTransport {
     }
 
     private func sendClockPing() {
+        guard handshakeComplete else { return }
         let clientTime = Date().timeIntervalSince1970 * 1000
         sendJSON(["type": "ping", "clientTime": clientTime])
+    }
+
+    private func sendHello(attempt: Int) {
+        guard !suspended, let details = connectionDetails, let task, task.state == .running else {
+            guard !suspended else { return }
+            helloRetryWorkItem = DispatchWorkItem { [weak self] in self?.sendHello(attempt: attempt) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: helloRetryWorkItem!)
+            return
+        }
+        var hello: [String: Any] = ["type": "hello", "room": details.room, "clientID": details.clientID, "name": details.name, "role": details.role]
+        if let sessionToken { hello["sessionToken"] = sessionToken }
+        guard JSONSerialization.isValidJSONObject(hello), let data = try? JSONSerialization.data(withJSONObject: hello), let text = String(data: data, encoding: .utf8) else { return }
+        task.send(.string(text)) { [weak self] error in
+            guard let self, let error else { return }
+            MusiCollabDiagnostics.error("Session hello failed: \(error.localizedDescription)")
+            guard attempt < 3, !self.suspended else {
+                self.onHandshake?(false, "hello failed")
+                self.onStatus?("unable to join session — retrying")
+                self.task = nil
+                self.scheduleRetry()
+                return
+            }
+            self.helloRetryWorkItem = DispatchWorkItem { [weak self] in self?.sendHello(attempt: attempt + 1) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: self.helloRetryWorkItem!)
+        }
     }
 
     private func scheduleRetry() {

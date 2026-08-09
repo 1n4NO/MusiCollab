@@ -11,12 +11,14 @@
 		15F8AEB5E48C9B051E36E717 /* SampleLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D61F3CF38D0F5A18EB36C35E /* SampleLibrary.swift */; };
 		1E0F0E5B687654E61F9385B6 /* AudioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDB65EFF68B856A66E3C066 /* AudioEngine.swift */; };
 		35099A6B3DC466ED5383AE0A /* MusicalAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2559297942B6F34C2E8F9DF3 /* MusicalAssets.swift */; };
+		90A9CFFAEC4467F33CA4353F /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DA0616A1C4D6A8BE1B5856 /* Diagnostics.swift */; };
 		D01B21CF96CA6AFF1BE8221D /* RootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A4794612F5912908692B5B /* RootViewController.swift */; };
 		F2CADD3ADAEA3A019A66007F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */; };
 		F5EB9995295BFCC170A8691E /* SessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FCF2C429FB4897706BF249E /* SessionTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		23DA0616A1C4D6A8BE1B5856 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		2559297942B6F34C2E8F9DF3 /* MusicalAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicalAssets.swift; sourceTree = "<group>"; };
 		26E4FF0C1F47D8D525BD9530 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7FCF2C429FB4897706BF249E /* SessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransport.swift; sourceTree = "<group>"; };
@@ -73,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				B145702A855230C370A575B6 /* AssetCache.swift */,
+				23DA0616A1C4D6A8BE1B5856 /* Diagnostics.swift */,
 				D61F3CF38D0F5A18EB36C35E /* SampleLibrary.swift */,
 			);
 			path = Services;
@@ -162,6 +165,7 @@
 				F2CADD3ADAEA3A019A66007F /* AppDelegate.swift in Sources */,
 				06026601F5329182D6D54F9B /* AssetCache.swift in Sources */,
 				1E0F0E5B687654E61F9385B6 /* AudioEngine.swift in Sources */,
+				90A9CFFAEC4467F33CA4353F /* Diagnostics.swift in Sources */,
 				35099A6B3DC466ED5383AE0A /* MusicalAssets.swift in Sources */,
 				D01B21CF96CA6AFF1BE8221D /* RootViewController.swift in Sources */,
 				15F8AEB5E48C9B051E36E717 /* SampleLibrary.swift in Sources */,
@@ -178,6 +182,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L4Q834S9XV;
 				INFOPLIST_FILE = MusiCollab/Info.plist;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
@@ -189,6 +194,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.MusiCollab;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -324,6 +330,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L4Q834S9XV;
 				INFOPLIST_FILE = MusiCollab/Info.plist;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
@@ -335,6 +342,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.MusiCollab;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

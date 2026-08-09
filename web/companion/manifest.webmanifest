@@ -1,7 +1,8 @@
 {
   "name": "MusiCollab Companion",
   "short_name": "MusiCollab",
-  "start_url": "/companion?room=LOCAL",
+  "version": "0.1.0",
+  "start_url": "/companion/?room=LOCAL",
   "scope": "/companion/",
   "display": "standalone",
   "orientation": "landscape",

@@ -5,6 +5,20 @@ iPhone 14 performance app, and iPhone 6 Plus companion web app.
 
 ## Run
 
+Recommended Mac workflow:
+
+```sh
+/Users/ps/dev/MusiCollab/scripts/musicollab-server.sh start
+/Users/ps/dev/MusiCollab/scripts/musicollab-server.sh status
+/Users/ps/dev/MusiCollab/scripts/musicollab-server.sh stop
+```
+
+The controller checks Node.js/npm and installs the locked dependencies when
+needed. It reports the process holding port 8787 instead of starting over it,
+prints the Mac LAN join URLs, and writes the background log to
+`/tmp/musicollab-session-server.log`. Use `MUSICOLLAB_PORT=8789` for a second
+development instance.
+
 ```sh
 cd /Users/ps/dev/MusiCollab/server
 npm install
@@ -28,6 +42,10 @@ The server exposes:
 For phones on the same Wi-Fi network, replace `127.0.0.1` with the Mac's LAN
 IP address. The server defaults to room `LOCAL`; clients may provide another
 room in their `hello` message.
+
+The Mac firewall must allow incoming connections for Node.js on the selected
+port. Keep the Mac and both phones on the same Wi-Fi network; guest-network or
+AP-isolation settings can prevent the phones from reaching the server.
 
 For the native iPhone 14 app, `project.yml` currently points to this Mac's LAN
 address: `ws://192.168.29.33:8787/ws`. If the Mac's IP changes, update that

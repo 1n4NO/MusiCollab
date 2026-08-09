@@ -9,6 +9,15 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "12.0"
+schemes:
+  MusiCollab:
+    build:
+      targets:
+        MusiCollab: all
+    run:
+      config: Debug
+    archive:
+      config: Release
 targets:
   MusiCollab:
     type: application
@@ -21,6 +30,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.MusiCollab
         DEVELOPMENT_TEAM: L4Q834S9XV
         CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UIRequiresFullScreen: true
@@ -30,6 +41,8 @@ targets:
     info:
       path: MusiCollab/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         MusiCollabServerURL: "ws://192.168.29.33:8787/ws"
         NSLocalNetworkUsageDescription: "Connect nearby iPhones for a shared music session."
         NSAppTransportSecurity:

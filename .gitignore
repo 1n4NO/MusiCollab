@@ -7,6 +7,15 @@ xcuserdata/
 
 # macOS
 .DS_Store
+.local-certs/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.cer
 
 # Swift Package Manager
 .build/

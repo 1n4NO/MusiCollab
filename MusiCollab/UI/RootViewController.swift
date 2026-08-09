@@ -13,11 +13,18 @@ final class RootViewController: UIViewController {
     private var playButton: UIButton!
     private var padButtons: [UIButton] = []
     private var padHeightConstraints: [NSLayoutConstraint] = []
+    private var activePadTouches = Set<Int>()
+    private var warmedPads = Set<Int>()
     private var importedSample: ImportedSample?
     private var sessionTransport: SessionTransport?
     private var receivedEventIDs = Set<String>()
+    private var scheduledRemoteEvents: [String: DispatchWorkItem] = [:]
+    private var lastRemoteSequence = 0
     private var sliceMappings: [String: [String: String]] = [:]
     private var clockOffsetMs: Double = 0
+    private var currentBeat: Double = 0
+    private let padHaptic = UIImpactFeedbackGenerator(style: .light)
+    private var hapticsEnabled: Bool { !UserDefaults.standard.bool(forKey: "musicollab.hapticsDisabled") }
 
     private let bg = UIColor(red: 0.055, green: 0.065, blue: 0.09, alpha: 1)
     private let panel = UIColor(red: 0.10, green: 0.115, blue: 0.15, alpha: 1)
@@ -39,8 +46,11 @@ final class RootViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = bg
+        view.isMultipleTouchEnabled = true
+        padHaptic.prepare()
         NotificationCenter.default.addObserver(self, selector: #selector(handleAppActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleAppBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAudioStatus(_:)), name: .musiCollabAudioStatus, object: audio)
         buildInterface()
         connectToSessionServer()
         audio.start()
@@ -56,12 +66,21 @@ final class RootViewController: UIViewController {
     }
 
     @objc private func handleAppBackground() {
+        activePadTouches.removeAll()
+        cancelScheduledRemoteEvents()
         sessionTransport?.suspend()
+        performanceModeLabel?.text = "Audio ready  /  session suspended"
+    }
+
+    @objc private func handleAudioStatus(_ notification: Notification) {
+        guard let message = notification.userInfo?["message"] as? String else { return }
+        performanceModeLabel?.text = message
     }
 
     private func buildInterface() {
         let scroll = UIScrollView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.contentInsetAdjustmentBehavior = .never
         view.addSubview(scroll)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -73,7 +92,9 @@ final class RootViewController: UIViewController {
         let content = UIStackView()
         content.axis = .vertical
         content.spacing = 14
-        content.layoutMargins = UIEdgeInsets(top: 14, left: 16, bottom: 24, right: 16)
+        // The landscape performance surface is edge-to-edge. Panels retain
+        // their own internal padding, while the stack adds no side gutters.
+        content.layoutMargins = UIEdgeInsets(top: 10, left: 0, bottom: 24, right: 0)
         content.isLayoutMarginsRelativeArrangement = true
         content.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(content)
@@ -94,12 +115,16 @@ final class RootViewController: UIViewController {
         performanceModeLabel.text = "Shared session  /  DRUMS  /  0 st"
         performanceModeLabel.textColor = .lightGray
         performanceModeLabel.font = UIFont.systemFont(ofSize: 13, weight: .medium)
+        performanceModeLabel.adjustsFontForContentSizeCategory = true
+        performanceModeLabel.numberOfLines = 2
         content.addArrangedSubview(performanceModeLabel)
 
         beatLabel = UILabel()
         beatLabel.text = "BEAT 0.00"
         beatLabel.textColor = cyan
         beatLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 16, weight: .bold)
+        beatLabel.adjustsFontForContentSizeCategory = true
+        beatLabel.accessibilityLabel = "Shared session beat"
         content.addArrangedSubview(beatLabel)
 
         let transport = makePanel()
@@ -129,6 +154,9 @@ final class RootViewController: UIViewController {
         connectionLabel.text = "● searching"
         connectionLabel.textColor = .lightGray
         connectionLabel.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+        connectionLabel.adjustsFontForContentSizeCategory = true
+        connectionLabel.accessibilityLabel = "Session connection status"
+        connectionLabel.accessibilityTraits = [.updatesFrequently]
         transportStack.addArrangedSubview(playButton)
         transportStack.addArrangedSubview(tempoMinus)
         transportStack.addArrangedSubview(tempoLabel)
@@ -150,7 +178,10 @@ final class RootViewController: UIViewController {
                 let index = row * 4 + column
                 let button = makePad(title: ["KICK", "SNARE", "HAT", "CLAP", "PERC", "TOM", "RIM", "FX"][index], color: index == 0 ? coral : panel)
                 button.tag = index
+                button.isMultipleTouchEnabled = true
+                button.isExclusiveTouch = false
                 button.addTarget(self, action: #selector(hitPad(_:)), for: .touchDown)
+                button.addTarget(self, action: #selector(releasePad(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
                 rowStack.addArrangedSubview(button)
                 padButtons.append(button)
             }
@@ -235,6 +266,7 @@ final class RootViewController: UIViewController {
         label.text = text
         label.textColor = .lightGray
         label.font = UIFont.systemFont(ofSize: 11, weight: .bold)
+        label.adjustsFontForContentSizeCategory = true
         return label
     }
 
@@ -242,7 +274,9 @@ final class RootViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
         button.setTitleColor(color, for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .bold)
+        button.titleLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.minimumScaleFactor = 0.7
         button.backgroundColor = UIColor.white.withAlphaComponent(0.06)
         button.layer.cornerRadius = 10
         button.heightAnchor.constraint(equalToConstant: 44).isActive = true
@@ -253,7 +287,13 @@ final class RootViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
         button.setTitleColor(.white, for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .bold)
+        button.titleLabel?.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.minimumScaleFactor = 0.7
+        button.accessibilityLabel = "\(title) drum pad"
+        button.accessibilityHint = "Plays the \(title.lowercased()) sound immediately"
+        button.accessibilityValue = "Ready"
+        button.accessibilityTraits = [.button]
         button.backgroundColor = color
         button.layer.cornerRadius = 12
         let height = button.heightAnchor.constraint(equalToConstant: 74)
@@ -276,8 +316,29 @@ final class RootViewController: UIViewController {
               let url = URL(string: urlString) else { return }
         let transport = SessionWebSocketClient(url: url)
         transport.onConnectionChanged = { [weak self] connected in
-            self?.connectionLabel.text = connected ? "● session online" : "● session offline"
-            self?.connectionLabel.textColor = connected ? self?.cyan : .lightGray
+            DispatchQueue.main.async {
+                self?.connectionLabel.text = connected ? "● session online" : "● session offline"
+                self?.connectionLabel.textColor = connected ? self?.cyan : .lightGray
+            }
+        }
+        transport.onHandshake = { [weak self] valid, state in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if valid {
+                    self.connectionLabel.text = "● online  /  \(state)"
+                    self.connectionLabel.textColor = self.cyan
+                } else {
+                    self.connectionLabel.text = "● \(state)"
+                    self.connectionLabel.textColor = .lightGray
+                }
+            }
+        }
+        transport.onStatus = { [weak self] status in
+            DispatchQueue.main.async {
+                self?.connectionLabel.text = "● \(status)"
+                self?.connectionLabel.textColor = .lightGray
+                self?.performanceModeLabel.text = status
+            }
         }
         transport.onClockQuality = { [weak self] offset, rtt in
             DispatchQueue.main.async {
@@ -287,26 +348,50 @@ final class RootViewController: UIViewController {
         }
         transport.onMessage = { [weak self] message in
             guard let self else { return }
+            if message["type"] as? String == "error" {
+                let code = message["code"] as? String ?? "SERVER_ERROR"
+                let detail = message["message"] as? String ?? "Request rejected"
+                DispatchQueue.main.async {
+                    self.connectionLabel.text = "● \(code)"
+                    self.connectionLabel.textColor = self.coral
+                    self.performanceModeLabel.text = detail
+                }
+                return
+            }
             if message["type"] as? String == "clock" {
                 let beat = message["beat"] as? Double ?? 0
                 let bar = message["bar"] as? Int ?? 1
                 let loopPosition = message["loopPosition"] as? Double ?? 0
+                self.currentBeat = max(0, beat)
                 DispatchQueue.main.async {
                     self.beatLabel.text = String(format: "BEAT %.2f  ·  BAR %d  ·  LOOP %.2f", beat, bar, loopPosition)
                 }
                 return
             }
-            if message["type"] as? String == "snapshot",
-               let state = message["state"] as? [String: Any],
-               let library = state["library"] as? [String: Any],
-               let samples = library["samples"] as? [[String: Any]],
-               let sample = samples.first {
-                self.handleRemoteSampleMetadata(sample)
+            if message["type"] as? String == "snapshot" {
+                self.cancelScheduledRemoteEvents()
+                self.receivedEventIDs.removeAll()
+                self.lastRemoteSequence = message["sequence"] as? Int ?? 0
+                if let state = message["state"] as? [String: Any] {
+                    if let instrument = state["instrument"] as? [String: Any] {
+                        self.applyRemoteInstrument(instrument)
+                    }
+                    if let tracks = state["tracks"] as? [String: Any], let drums = tracks["drums"] as? [String: Any] {
+                        self.audio.applyTrackControl(drums)
+                    }
+                    if let library = state["library"] as? [String: Any],
+                       let samples = library["samples"] as? [[String: Any]],
+                       let sample = samples.first {
+                        self.handleRemoteSampleMetadata(sample)
+                    }
+                }
                 return
             }
             guard message["type"] as? String == "event",
                   let eventID = message["eventID"] as? String,
                   !self.receivedEventIDs.contains(eventID) else { return }
+            if let sequence = message["sequence"] as? Int, sequence <= self.lastRemoteSequence { return }
+            if let sequence = message["sequence"] as? Int { self.lastRemoteSequence = sequence }
             self.receivedEventIDs.insert(eventID)
             if self.receivedEventIDs.count > 512, let oldest = self.receivedEventIDs.first {
                 self.receivedEventIDs.remove(oldest)
@@ -314,7 +399,7 @@ final class RootViewController: UIViewController {
 
             guard message["sender"] as? String != "iphone14",
                   let eventType = message["eventType"] as? String else { return }
-            if eventType == "padHit", let payload = message["payload"] as? [String: Any], let pad = payload["pad"] as? Int {
+            if eventType == "padHit", let payload = message["payload"] as? [String: Any], let pad = payload["pad"] as? Int, (0..<8).contains(pad) {
                 let rawVelocity = (payload["velocity"] as? Double ?? 0.86) * 127
                 let velocity = UInt8(max(1, min(127, Int(rawVelocity))))
                 let timing = message["timing"] as? [String: Any]
@@ -324,8 +409,11 @@ final class RootViewController: UIViewController {
                 DispatchQueue.main.async {
                     self.performanceModeLabel.text = String(format: "Latency  /  client→server %.0f ms  /  server→peer %.0f ms", clientToServerMs, serverToPeerMs)
                 }
-                self.scheduleRemotePad(pad: pad, velocity: velocity, targetServerTime: targetServerTime)
+                self.scheduleRemotePad(eventID: eventID, pad: pad, velocity: velocity, targetServerTime: targetServerTime)
             } else if eventType == "transport", let payload = message["payload"] as? [String: Any] {
+                if ["stop", "pause"].contains(payload["action"] as? String) {
+                    self.cancelScheduledRemoteEvents()
+                }
                 if let playing = payload["playing"] as? Bool {
                     self.isPlaying = playing
                     self.playButton.setTitle(playing ? "■" : "▶", for: .normal)
@@ -335,14 +423,20 @@ final class RootViewController: UIViewController {
                     self.tempoLabel.text = "\(self.tempo) BPM"
                 }
             } else if eventType == "instrument", let payload = message["payload"] as? [String: Any], let instrument = payload["instrument"] as? String {
-                let pitch = payload["pitch"] as? Int ?? 0
-                self.audio.setInstrument(instrument, pitchSemitones: pitch)
-                self.performanceModeLabel.text = "Shared session  /  \(instrument.uppercased())  /  \(pitch >= 0 ? "+" : "")\(pitch) st"
+                self.applyRemoteInstrument(payload.merging(["instrument": instrument]) { current, _ in current })
             } else if eventType == "instrumentParam", let payload = message["payload"] as? [String: Any], let parameters = payload["parameters"] as? [String: Any] {
                 for (name, value) in parameters {
                     if let number = value as? Double { self.audio.setInstrumentParameter(name, value: number) }
                 }
                 self.performanceModeLabel.text = "Instrument parameters updated  /  \(parameters.count) controls"
+            } else if eventType == "trackControl", let payload = message["payload"] as? [String: Any] {
+                self.audio.applyTrackControl(payload)
+                let track = payload["trackID"] as? String ?? "track"
+                let mute = (payload["mute"] as? Bool) == true ? "muted" : "active"
+                self.performanceModeLabel.text = "Track  /  \(track.uppercased())  /  \(mute)"
+            } else if eventType == "scene" {
+                self.cancelScheduledRemoteEvents()
+                self.performanceModeLabel.text = "Scene changed  /  pending events canceled"
             } else if eventType == "asset", let payload = message["payload"] as? [String: Any], let asset = payload["asset"] as? [String: Any], asset["type"] as? String == "sample" {
                 self.handleRemoteSampleMetadata(asset)
             } else if eventType == "sliceMap", let sampleID = (message["payload"] as? [String: Any])?["sampleID"] as? String, let assignments = (message["payload"] as? [String: Any])?["assignments"] as? [String: Any] {
@@ -390,32 +484,44 @@ final class RootViewController: UIViewController {
         }
     }
 
-    private func scheduleRemotePad(pad: Int, velocity: UInt8, targetServerTime: Double?) {
+    private func applyRemoteInstrument(_ dictionary: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
+              let preset = try? JSONDecoder().decode(InstrumentPreset.self, from: data) else { return }
+        audio.applyInstrument(preset)
+        let pitch = preset.pitch
+        performanceModeLabel.text = "Shared session  /  \(preset.name.uppercased())  /  \(pitch >= 0 ? "+" : "")\(pitch) st"
+    }
+
+    private func scheduleRemotePad(eventID: String, pad: Int, velocity: UInt8, targetServerTime: Double?) {
+        guard scheduledRemoteEvents[eventID] == nil else { return }
         let note = UInt8(36 + pad)
-        guard let targetServerTime else {
-            audio.trigger(note: note, velocity: velocity)
-            flashPad(pad)
-            return
+        let delay: TimeInterval
+        if let targetServerTime {
+            let estimatedLocalTime = (targetServerTime - clockOffsetMs) / 1000
+            delay = max(0, estimatedLocalTime - Date().timeIntervalSince1970)
+        } else {
+            delay = 0
         }
-
-        let estimatedLocalTime = (targetServerTime - clockOffsetMs) / 1000
-        let delay = estimatedLocalTime - Date().timeIntervalSince1970
-        if delay <= 0.02 {
-            audio.trigger(note: note, velocity: velocity)
-            flashPad(pad)
-            return
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.scheduledRemoteEvents[eventID] != nil else { return }
+            self.scheduledRemoteEvents.removeValue(forKey: eventID)
             self.audio.trigger(note: note, velocity: velocity)
             self.flashPad(pad)
         }
+        scheduledRemoteEvents[eventID] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + min(delay, 10), execute: work)
+    }
+
+    private func cancelScheduledRemoteEvents() {
+        scheduledRemoteEvents.values.forEach { $0.cancel() }
+        scheduledRemoteEvents.removeAll()
     }
 
     @objc private func togglePlay() {
         isPlaying.toggle()
         playButton.setTitle(isPlaying ? "■" : "▶", for: .normal)
+        sessionTransport?.cancelPending(eventTypes: ["transport"])
+        if !isPlaying { cancelScheduledRemoteEvents() }
         sessionTransport?.send(eventType: "transport", payload: ["action": isPlaying ? "play" : "pause", "bpm": tempo])
     }
 
@@ -425,21 +531,50 @@ final class RootViewController: UIViewController {
     private func setTempo(_ value: Int) {
         tempo = value
         tempoLabel.text = "\(tempo) BPM"
+        sessionTransport?.cancelPending(eventTypes: ["transport"])
         sessionTransport?.send(eventType: "transport", payload: ["action": isPlaying ? "play" : "pause", "bpm": tempo])
     }
 
     @objc private func hitPad(_ sender: UIButton) {
+        guard activePadTouches.insert(sender.tag).inserted else { return }
         let inputAt = Date().timeIntervalSince1970 * 1000
         audio.trigger(note: UInt8(36 + sender.tag))
+        if hapticsEnabled {
+            padHaptic.impactOccurred()
+            padHaptic.prepare()
+        }
         let audioAt = Date().timeIntervalSince1970 * 1000
+        sender.accessibilityValue = "Playing"
         flashPad(sender.tag)
-        performanceModeLabel.text = String(format: "Latency  /  touch→audio %.1f ms", audioAt - inputAt)
-        sessionTransport?.send(eventType: "padHit", payload: ["track": "drums", "pad": sender.tag, "velocity": 0.86, "inputAt": inputAt, "audioAt": audioAt])
+        let latency = audioAt - inputAt
+        let phase = warmedPads.insert(sender.tag).inserted ? "cold" : "warm"
+        performanceModeLabel.text = String(format: "Latency  /  %@ touch→audio %.1f ms", phase, latency)
+        sessionTransport?.send(eventType: "padHit", payload: [
+            "track": "drums",
+            "pad": sender.tag,
+            "velocity": 0.86,
+            "beat": currentBeat,
+            "inputAt": inputAt,
+            "audioAt": audioAt
+        ])
+    }
+
+    @objc private func releasePad(_ sender: UIButton) {
+        activePadTouches.remove(sender.tag)
+        sender.accessibilityValue = "Ready"
     }
 
     private func flashPad(_ index: Int) {
         guard padButtons.indices.contains(index) else { return }
         let pad = padButtons[index]
+        if UIAccessibility.isReduceMotionEnabled {
+            pad.backgroundColor = cyan
+            pad.transform = .identity
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                pad.backgroundColor = index == 0 ? self.coral : self.panel
+            }
+            return
+        }
         UIView.animate(withDuration: 0.08, animations: {
             pad.backgroundColor = self.cyan
             pad.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)

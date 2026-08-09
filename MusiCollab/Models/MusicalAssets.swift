@@ -13,6 +13,29 @@ enum MusicalAssetType: String, Codable {
     case slice
 }
 
+/// Session-level instrument contract shared by the composer, companion, and
+/// native performer. Audio engines may render this preset differently; the
+/// session protocol only carries this abstract description.
+struct InstrumentPreset: Codable, Equatable {
+    var instrumentID: String
+    var instrument: String
+    var name: String
+    var family: String
+    var engine: String
+    var parameters: [String: Double]
+    var pitch: Int
+
+    init(instrumentID: String, instrument: String, name: String, family: String, engine: String = "abstract", parameters: [String: Double] = [:], pitch: Int = 0) {
+        self.instrumentID = instrumentID
+        self.instrument = instrument
+        self.name = name
+        self.family = family
+        self.engine = engine
+        self.parameters = parameters
+        self.pitch = max(-24, min(24, pitch))
+    }
+}
+
 struct MusicalSlice: Codable, Equatable {
     var id: String
     var name: String
