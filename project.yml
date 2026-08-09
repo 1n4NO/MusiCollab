@@ -3,12 +3,12 @@ options:
   bundleIdPrefix: com.example
   projectFormat: xcode16_0
   deploymentTarget:
-    iOS: "12.0"
+    iOS: "16.0"
   createIntermediateGroups: true
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    IPHONEOS_DEPLOYMENT_TARGET: "12.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
 schemes:
   MusiCollab:
     build:
@@ -25,13 +25,17 @@ targets:
     supportedDestinations: [iOS]
     sources:
       - path: MusiCollab
+    resources:
+      - path: MusiCollab/LaunchScreen.storyboard
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.MusiCollab
         DEVELOPMENT_TEAM: L4Q834S9XV
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.1.12"
+        CURRENT_PROJECT_VERSION: "13"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: false
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UIRequiresFullScreen: true

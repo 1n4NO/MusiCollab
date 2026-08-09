@@ -58,6 +58,9 @@ final class RootViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         audio.start()
+        if #available(iOS 16.0, *), let windowScene = view.window?.windowScene {
+            windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscape))
+        }
     }
 
     deinit {
@@ -101,6 +104,7 @@ final class RootViewController: UIViewController {
 
         let content = UIStackView()
         content.axis = .vertical
+        content.alignment = .fill
         content.spacing = 14
         // The landscape performance surface is edge-to-edge. Panels retain
         // their own internal padding, while the stack adds no side gutters.
@@ -112,6 +116,7 @@ final class RootViewController: UIViewController {
             content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
             content.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: scroll.frameLayoutGuide.trailingAnchor),
+            content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
             content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor)
         ])
 
@@ -184,6 +189,7 @@ final class RootViewController: UIViewController {
             let rowStack = UIStackView()
             rowStack.axis = .horizontal
             rowStack.spacing = 8
+            rowStack.distribution = .fillEqually
             for column in 0..<4 {
                 let index = row * 4 + column
                 let button = makePad(title: ["KICK", "SNARE", "HAT", "CLAP", "PERC", "TOM", "RIM", "FX"][index], color: index == 0 ? coral : panel)

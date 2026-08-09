@@ -14,9 +14,9 @@ iPhone 14 performance app, and an iPhone 6 Plus web companion.
 
 ## Important device constraint
 
-The iPhone 6 Plus supports iOS 12.5.x. This project therefore uses UIKit and an
-iOS 12 deployment target rather than SwiftUI-only APIs. Keep newer APIs behind
-availability checks.
+The native performer targets iPhone 14-class devices running iOS 16 or newer.
+The iPhone 6 Plus is supported by the companion PWA in landscape Safari/Home
+Screen mode and does not run the native app.
 
 ## Build setup
 

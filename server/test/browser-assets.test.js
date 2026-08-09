@@ -62,8 +62,18 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(companion.body, /data-action="up"/);
   assert.match(companion.body, /id="pitch"/);
   assert.match(companion.body, /min="-24" max="24"/);
+  assert.match(companion.body, /id="roomInput"/);
+  assert.match(companion.body, /id="joinRoom"/);
+  assert.match(companion.body, /id="sliceList"/);
+  assert.match(companion.body, /data-transport="play"/);
+  assert.match(companion.body, /id="sceneSelect"/);
+  assert.match(companion.body, /musicollab\.companion\.queue/);
+  assert.match(companion.body, /musicollab\.companion\.sample/);
   assert.match(companion.body, /connectionState='reconnecting'/);
   assert.match(companion.body, /function renderSample\(sample\)/);
+  assert.match(companion.body, /orientationNotice/);
+  assert.match(companion.body, /@media\(orientation:portrait\)/);
+  assert.match(companion.body, /:focus-visible/);
 });
 
 test("companion PWA assets advertise landscape and versioned offline behavior", async () => {

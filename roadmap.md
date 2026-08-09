@@ -8,11 +8,14 @@ through one WebSocket session.
 
 ## Current state
 
-- UIKit iPhone performance prototype exists.
-- Synthesized drum-pad audio works locally.
-- Phase 1 WebSocket session server is implemented and tested.
-- Mac/web clients are the next implementation focus.
-- Sample import metadata and slice-boundary generation exist as foundations.
+- The Mac Composer, iPhone 14 performer, and iPhone 6 Plus companion PWA are
+  implemented against the shared WebSocket session.
+- Synthesized drum-pad audio, instrument/pitch control, shared transport,
+  queueing, waveform metadata, and slice editing are implemented.
+- Reconnect, session resumption, clock metrics, browser recovery, and
+  three-client automated acceptance tests pass.
+- The native performer targets iOS 16+ and uses a real launch storyboard to
+  avoid legacy 480×320 compatibility scaling.
 - GUI reference: [`Mockup.html`](./Mockup.html)
 - Detailed implementation backlog: [`tickets/README.md`](./tickets/README.md)
 

@@ -62,12 +62,12 @@
 
 ## MC-041 — Composer responsive and accessibility pass
 
-- Priority: P2 · Status: planned · Dependencies: MC-029
+- Priority: P2 · Status: done · Dependencies: MC-029
 - Acceptance: Keyboard focus, reduced motion, readable contrast, zoom to 200%, and narrow-window behavior are verified.
 
 ## MC-042 — Composer visual regression fixtures
 
-- Priority: P2 · Status: planned · Dependencies: MC-029, MC-033
+- Priority: P2 · Status: done · Dependencies: MC-029, MC-033
 - Acceptance: Representative empty, connected, busy, error, and three-client screenshots can be compared across changes.
 
 ## MC-122 — Desktop audio-output toggle
@@ -87,5 +87,5 @@
 
 ## MC-125 — Composer landscape-first layout
 
-- Priority: P1 · Status: planned · Dependencies: MC-119, MC-029
+- Priority: P1 · Status: done · Dependencies: MC-119, MC-029
 - Acceptance: The desktop composer is optimized for landscape/wide windows; narrow or portrait windows show a clear rotate/resize guidance state without losing session status.

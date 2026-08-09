@@ -5,6 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 tracked_files="$(git ls-files)"
 [ -n "$tracked_files" ] || { echo "No tracked files found; privacy scan cannot run." >&2; exit 1; }
+scan_files="$(printf '%s\n' "$tracked_files" | rg -v '^scripts/privacy-scan\.sh$')"
 
 for pattern in \
   'BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY' \
@@ -12,7 +13,7 @@ for pattern in \
   'gh[pousr]_[A-Za-z0-9_]{20,}' \
   'xox[baprs]-[A-Za-z0-9-]+' \
   '-----BEGIN CERTIFICATE-----'; do
-  if rg -n -- "$pattern" $tracked_files; then
+  if rg -n -- "$pattern" $scan_files; then
     echo "Potential secret material matched: $pattern" >&2
     exit 1
   fi

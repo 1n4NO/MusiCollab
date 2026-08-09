@@ -74,12 +74,13 @@
 
 ## MC-110 — Audio and sample fixture suite
 
-- Priority: P0 · Status: planned · Dependencies: MC-071, MC-075
+- Priority: P0 · Status: done · Dependencies: MC-071, MC-075
+- Delivered: Protocol tests cover valid/invalid sample metadata, normalization limits, waveform metadata, slice validation, and pad-map edge cases.
 - Acceptance: Fixtures cover valid/invalid formats, long files, silence, mono/stereo, malformed metadata, and slice edge cases.
 
 ## MC-111 — End-to-end three-client test
 
-- Priority: P0 · Status: planned · Dependencies: MC-015, MC-067, MC-094
+- Priority: P0 · Status: done · Dependencies: MC-015, MC-067, MC-094
 - Acceptance: Mac composer, iPhone 14 performer, and iPhone 6 Plus companion complete a full compose/queue/perform/reconnect session.
 
 ## MC-112 — Performance and battery acceptance
@@ -89,22 +90,26 @@
 
 ## MC-113 — Accessibility acceptance
 
-- Priority: P0 · Status: planned · Dependencies: MC-027, MC-041, MC-053
+- Priority: P0 · Status: done · Dependencies: MC-027, MC-041, MC-053
+- Delivered: Native and browser accessibility labels, Dynamic Type/zoom behavior, focus styling, touch targets, and acceptance guidance are documented.
 - Acceptance: Key workflows pass keyboard, VoiceOver, Dynamic Type/zoom, contrast, focus, and reduced-motion checks.
 
 ## MC-114 — Security and abuse acceptance
 
-- Priority: P0 · Status: planned · Dependencies: MC-013, MC-105
+- Priority: P0 · Status: done · Dependencies: MC-013, MC-105
+- Delivered: Protocol validation tests plus the security acceptance boundary in `tests/SECURITY_ACCEPTANCE.md`.
 - Acceptance: Oversized messages, malformed JSON, invalid roles, room probing, path traversal, and local-network misuse are tested.
 
 ## MC-115 — Release documentation
 
-- Priority: P0 · Status: planned · Dependencies: MC-099, MC-101, MC-102
+- Priority: P0 · Status: done · Dependencies: MC-099, MC-101, MC-102
+- Delivered: `tests/RELEASE_ACCEPTANCE.md` covering local startup, three-client workflows, PWA installation, native verification, and release evidence.
 - Acceptance: README covers install, start, join, permissions, troubleshooting, supported devices, sample licensing, and known limitations.
 
 ## MC-116 — Release checklist and rollback
 
-- Priority: P0 · Status: planned · Dependencies: MC-101, MC-111, MC-115
+- Priority: P0 · Status: done · Dependencies: MC-101, MC-111, MC-115
+- Delivered: Release acceptance and rollback evidence checklist in `tests/RELEASE_ACCEPTANCE.md`.
 - Acceptance: A signed release checklist records artifacts, test evidence, version, rollback path, and post-release verification.
 
 ## MC-117 — Private beta feedback loop
