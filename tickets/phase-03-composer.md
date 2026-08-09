@@ -2,62 +2,62 @@
 
 ## MC-029 — Composer application shell
 
-- Priority: P0 · Status: in-progress · Dependencies: MC-011
+- Priority: P0 · Status: done · Dependencies: MC-011
 - Acceptance: Wide Mac layout has transport, arrangement, client roster, event stream, and session status regions.
 
 ## MC-030 — Composer WebSocket lifecycle
 
-- Priority: P0 · Status: in-progress · Dependencies: MC-002, MC-009
+- Priority: P0 · Status: done · Dependencies: MC-002, MC-009
 - Acceptance: Composer joins as `composer`, renders connected/disconnected/reconnecting states, and reconnects without refresh.
 
 ## MC-031 — Client roster and role display
 
-- Priority: P0 · Status: planned · Dependencies: MC-008, MC-030
+- Priority: P0 · Status: done · Dependencies: MC-008, MC-030
 - Acceptance: All connected phones appear with stable names, roles, last-seen state, and useful empty/error states.
 
 ## MC-032 — Transport controls
 
-- Priority: P0 · Status: in-progress · Dependencies: MC-005, MC-030
+- Priority: P0 · Status: done · Dependencies: MC-005, MC-030
 - Acceptance: Play, stop, pause, BPM, beat, bar, and loop position are visible and emit validated commands.
 
 ## MC-033 — Arrangement timeline
 
-- Priority: P1 · Status: planned · Dependencies: MC-032
+- Priority: P1 · Status: done · Dependencies: MC-032
 - Acceptance: Timeline supports bars/beats, playhead, zoom, scrolling, and track regions without losing alignment.
 
 ## MC-034 — Drum track lane
 
-- Priority: P1 · Status: planned · Dependencies: MC-033, MC-021
+- Priority: P1 · Status: done · Dependencies: MC-033, MC-021
 - Acceptance: Incoming pad events appear in the drum lane with sender, pad, velocity, and beat information.
 
 ## MC-035 — Instrument track lanes
 
-- Priority: P1 · Status: planned · Dependencies: MC-023, MC-033
+- Priority: P1 · Status: done · Dependencies: MC-023, MC-033
 - Acceptance: Instrument tracks show name, arm/mute/solo state, clips, and active performer.
 
 ## MC-036 — Loop and sample lanes
 
-- Priority: P1 · Status: planned · Dependencies: MC-033, MC-048
+- Priority: P1 · Status: done · Dependencies: MC-033, MC-048
 - Acceptance: Loop and sample regions show duration, BPM/key metadata, slice boundaries, and queue state.
 
 ## MC-037 — Queue editor
 
-- Priority: P1 · Status: planned · Dependencies: MC-032
+- Priority: P1 · Status: done · Dependencies: MC-032
 - Acceptance: User can add, reorder, remove, and quantize queue items; changes have optimistic UI and server acknowledgement.
 
 ## MC-038 — Keyboard and pointer workflow
 
-- Priority: P1 · Status: planned · Dependencies: MC-032, MC-033
+- Priority: P1 · Status: done · Dependencies: MC-032, MC-033
 - Acceptance: Spacebar transport, keyboard shortcuts, pointer selection, drag, zoom, and undo-safe interactions work on Mac.
 
 ## MC-039 — Composer state persistence
 
-- Priority: P1 · Status: planned · Dependencies: MC-033, MC-037
+- Priority: P1 · Status: done · Dependencies: MC-033, MC-037
 - Acceptance: Draft arrangement and UI preferences persist locally, with explicit reset and migration versioning.
 
 ## MC-040 — Composer error and offline UX
 
-- Priority: P0 · Status: planned · Dependencies: MC-030
+- Priority: P0 · Status: done · Dependencies: MC-030
 - Acceptance: The deck explains server offline, room rejected, stale snapshot, reconnecting, and incompatible protocol states.
 
 ## MC-041 — Composer responsive and accessibility pass
