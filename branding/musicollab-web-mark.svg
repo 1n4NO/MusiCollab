@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">MusiCollab web mark</title>
+  <desc id="desc">An interlocking M formed by cyan, coral, and purple strokes.</desc>
+  <rect width="512" height="512" rx="112" fill="#0b0e13"/>
+  <path d="M104 388V124l152 152 152-152v264" fill="none" stroke="#2acfe5" stroke-width="56" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M408 388V124L256 276 104 124v264" fill="none" stroke="#ff5757" stroke-width="56" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="m218 238 38 38 38-38 26 26-64 64-64-64Z" fill="#8f5cff"/>
+</svg>

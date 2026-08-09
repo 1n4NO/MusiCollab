@@ -62,6 +62,7 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(companion.body, /data-action="up"/);
   assert.match(companion.body, /id="pitch"/);
   assert.match(companion.body, /min="-24" max="24"/);
+  assert.match(companion.body, /value="piano"/);
   assert.match(companion.body, /id="roomInput"/);
   assert.match(companion.body, /id="joinRoom"/);
   assert.match(companion.body, /id="sliceList"/);
@@ -79,11 +80,15 @@ test("composer and companion routes serve usable HTML shells", async () => {
 test("companion PWA assets advertise landscape and versioned offline behavior", async () => {
   const manifest = await get("/companion/manifest.webmanifest");
   const worker = await get("/companion/sw.js");
+  const webMark = await get("/branding/musicollab-web-mark.svg");
   assert.equal(manifest.response.status, 200);
   assert.match(manifest.response.headers.get("content-type"), /manifest\+json/);
   assert.match(manifest.body, /"orientation": "landscape"/);
   assert.match(manifest.body, /"start_url": "\/companion\//);
   assert.equal(worker.response.status, 200);
+  assert.equal(webMark.response.status, 200);
+  assert.match(webMark.response.headers.get("content-type"), /image\/svg\+xml/);
+  assert.match(webMark.body, /MusiCollab web mark/);
   assert.match(worker.response.headers.get("service-worker-allowed"), /\/companion\//);
   assert.match(worker.body, /const APP_VERSION = '0\.1\.0'/);
   assert.match(worker.body, /musicollab-companion-v\$\{APP_VERSION\}/);

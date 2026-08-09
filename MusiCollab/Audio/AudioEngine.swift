@@ -13,8 +13,10 @@ protocol InstrumentVoice: AnyObject {
 final class AudioEngine: InstrumentVoice {
     let engine = AVAudioEngine()
     private var drumNodes: [AVAudioPlayerNode] = []
+    private var pianoNodes: [AVAudioPlayerNode] = []
     private var drumBuffers: [UInt8: AVAudioPCMBuffer] = [:]
     private var nextVoiceByPad = Array(repeating: 0, count: 8)
+    private var nextPianoVoice = 0
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
     private let audioSession = AVAudioSession.sharedInstance()
     private(set) var preset = InstrumentPreset(instrumentID: "drums", instrument: "drums", name: "Drums", family: "percussion", parameters: ["voiceCount": 8, "character": 0.35])
@@ -34,6 +36,12 @@ final class AudioEngine: InstrumentVoice {
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: format)
             drumNodes.append(node)
+        }
+        for _ in 0..<16 {
+            let node = AVAudioPlayerNode()
+            engine.attach(node)
+            engine.connect(node, to: engine.mainMixerNode, format: format)
+            pianoNodes.append(node)
         }
         engine.prepare()
 
@@ -155,13 +163,13 @@ final class AudioEngine: InstrumentVoice {
     }
 
     func setInstrument(_ name: String, pitchSemitones: Int) {
-        let selected = ["drums", "bass", "keys", "sampler"].contains(name) ? name : "drums"
-        let family = selected == "drums" ? "percussion" : selected == "sampler" ? "sample" : "synth"
+        let selected = ["drums", "bass", "keys", "piano", "sampler"].contains(name) ? name : "drums"
+        let family = selected == "drums" ? "percussion" : selected == "sampler" ? "sample" : selected == "piano" ? "keyboard" : "synth"
         applyInstrument(InstrumentPreset(instrumentID: selected, instrument: selected, name: selected.capitalized, family: family, parameters: [:], pitch: pitchSemitones))
     }
 
     func applyInstrument(_ value: InstrumentPreset) {
-        let selected = ["drums", "bass", "keys", "sampler"].contains(value.instrument) ? value.instrument : "drums"
+        let selected = ["drums", "bass", "keys", "piano", "sampler"].contains(value.instrument) ? value.instrument : "drums"
         let boundedParameters = value.parameters.reduce(into: [String: Double]()) { result, item in
             if item.key == "voiceCount" {
                 result[item.key] = min(32, max(1, item.value.rounded()))
@@ -171,6 +179,27 @@ final class AudioEngine: InstrumentVoice {
         }
         preset = InstrumentPreset(instrumentID: value.instrumentID.isEmpty ? selected : value.instrumentID, instrument: selected, name: value.name.isEmpty ? selected.capitalized : value.name, family: value.family, engine: value.engine, parameters: boundedParameters, pitch: value.pitch)
         drumBuffers.removeAll()
+    }
+
+    func triggerPiano(key: Int, velocity: UInt8 = 110) {
+        guard (0..<8).contains(key) else { return }
+        if !engine.isRunning { start() }
+        guard engine.isRunning else {
+            postStatus("Audio unavailable — check the phone output route")
+            return
+        }
+        guard !trackMuted, soloTrackID == nil || soloTrackID == "piano" else { return }
+        let note = UInt8(60 + key)
+        let node = pianoNodes[nextPianoVoice]
+        nextPianoVoice = (nextPianoVoice + 1) % pianoNodes.count
+        node.stop()
+        node.volume = Float(trackVolume)
+        node.scheduleBuffer(makePianoBuffer(note: note, velocity: velocity), at: nil, options: [])
+        node.play()
+    }
+
+    func stopPiano() {
+        pianoNodes.forEach { $0.stop() }
     }
 
     func setInstrumentParameter(_ name: String, value: Double) {
@@ -258,6 +287,28 @@ final class AudioEngine: InstrumentVoice {
             }
 
             samples[frame] = sample * gain
+        }
+        return buffer
+    }
+
+    private func makePianoBuffer(note: UInt8, velocity: UInt8) -> AVAudioPCMBuffer {
+        let duration = 1.25
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)!
+        buffer.frameLength = frameCount
+        let samples = buffer.floatChannelData![0]
+        let gain = Float(velocity) / 127.0
+        let frequency = 440.0 * pow(2.0, (Double(note) - 69.0 + Double(pitchSemitones)) / 12.0)
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let attack = min(1.0, t / 0.008)
+            let decay = exp(-2.8 * t)
+            let envelope = Float(attack * decay)
+            let fundamental = sin(Float(2 * Double.pi * frequency * t))
+            let harmonic2 = sin(Float(2 * Double.pi * frequency * 2 * t)) * 0.42
+            let harmonic3 = sin(Float(2 * Double.pi * frequency * 3 * t)) * 0.18
+            let harmonic4 = sin(Float(2 * Double.pi * frequency * 4 * t)) * 0.08
+            samples[frame] = (fundamental + harmonic2 + harmonic3 + harmonic4) * envelope * gain * 0.42
         }
         return buffer
     }

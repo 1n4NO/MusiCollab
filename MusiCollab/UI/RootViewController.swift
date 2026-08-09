@@ -12,6 +12,7 @@ final class RootViewController: UIViewController {
     private var sampleTitleLabel: UILabel!
     private var playButton: UIButton!
     private var padButtons: [UIButton] = []
+    private var pianoButtons: [UIButton] = []
     private var padHeightConstraints: [NSLayoutConstraint] = []
     private var activePadTouches = Set<Int>()
     private var warmedPads = Set<Int>()
@@ -208,6 +209,31 @@ final class RootViewController: UIViewController {
             grid.addArrangedSubview(rowStack)
         }
         content.addArrangedSubview(grid)
+
+        content.addArrangedSubview(makeSectionLabel("PIANO · 8 KEYS"))
+        let pianoPanel = makePanel()
+        let pianoStack = UIStackView()
+        pianoStack.axis = .horizontal
+        pianoStack.spacing = 4
+        pianoStack.distribution = .fillEqually
+        pianoStack.translatesAutoresizingMaskIntoConstraints = false
+        pianoPanel.addSubview(pianoStack)
+        NSLayoutConstraint.activate([
+            pianoStack.topAnchor.constraint(equalTo: pianoPanel.topAnchor, constant: 10),
+            pianoStack.leadingAnchor.constraint(equalTo: pianoPanel.leadingAnchor, constant: 10),
+            pianoStack.trailingAnchor.constraint(equalTo: pianoPanel.trailingAnchor, constant: -10),
+            pianoStack.bottomAnchor.constraint(equalTo: pianoPanel.bottomAnchor, constant: -10)
+        ])
+        ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"].enumerated().forEach { index, name in
+            let button = makePianoKey(title: name)
+            button.tag = index
+            button.addTarget(self, action: #selector(hitPiano(_:)), for: .touchDown)
+            button.addTarget(self, action: #selector(tapPiano(_:)), for: .touchUpInside)
+            button.addTarget(self, action: #selector(releasePiano(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            pianoStack.addArrangedSubview(button)
+            pianoButtons.append(button)
+        }
+        content.addArrangedSubview(pianoPanel)
 
         content.addArrangedSubview(makeSectionLabel("LOOPS  /  INSTRUMENTS"))
         let loops = makePanel()
@@ -430,6 +456,18 @@ final class RootViewController: UIViewController {
                     self.performanceModeLabel.text = String(format: "Latency  /  client→server %.0f ms  /  server→peer %.0f ms", clientToServerMs, serverToPeerMs)
                 }
                 self.scheduleRemotePad(eventID: eventID, pad: pad, velocity: velocity, targetServerTime: targetServerTime)
+            } else if eventType == "noteOn", let payload = message["payload"] as? [String: Any], let key = payload["key"] as? Int, (0..<8).contains(key) {
+                let rawVelocity = (payload["velocity"] as? Double ?? 0.86) * 127
+                let velocity = UInt8(max(1, min(127, Int(rawVelocity))))
+                self.audio.triggerPiano(key: key, velocity: velocity)
+                DispatchQueue.main.async {
+                    self.pianoButtons[key].backgroundColor = self.violet
+                    self.pianoButtons[key].accessibilityValue = "Playing"
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        self.pianoButtons[key].backgroundColor = self.panel
+                        self.pianoButtons[key].accessibilityValue = "Ready"
+                    }
+                }
             } else if eventType == "transport", let payload = message["payload"] as? [String: Any] {
                 if ["stop", "pause"].contains(payload["action"] as? String) {
                     self.cancelScheduledRemoteEvents()
@@ -587,6 +625,42 @@ final class RootViewController: UIViewController {
     @objc private func tapPad(_ sender: UIButton) {
         guard !activePadTouches.contains(sender.tag) else { return }
         hitPad(sender)
+    }
+
+    private func makePianoKey(title: String) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .bold)
+        button.backgroundColor = panel
+        button.layer.cornerRadius = 8
+        button.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        button.accessibilityLabel = "Piano key (title)"
+        button.accessibilityValue = "Ready"
+        return button
+    }
+
+    @objc private func hitPiano(_ sender: UIButton) {
+        audio.setInstrument("piano", pitchSemitones: 0)
+        audio.triggerPiano(key: sender.tag)
+        sender.backgroundColor = violet
+        sender.accessibilityValue = "Playing"
+        sessionTransport?.send(eventType: "noteOn", payload: [
+            "instrument": "piano",
+            "key": sender.tag,
+            "velocity": 0.86,
+            "beat": currentBeat
+        ])
+    }
+
+    @objc private func tapPiano(_ sender: UIButton) {
+        hitPiano(sender)
+        releasePiano(sender)
+    }
+
+    @objc private func releasePiano(_ sender: UIButton) {
+        sender.backgroundColor = panel
+        sender.accessibilityValue = "Ready"
     }
 
     private func flashPad(_ index: Int) {

@@ -2,6 +2,7 @@ const BUILTIN_INSTRUMENTS = [
   { id: "drums", name: "Drums", family: "percussion", parameters: { voiceCount: 8, character: 0.35 } },
   { id: "bass", name: "Bass", family: "synth", parameters: { voiceCount: 1, cutoff: 0.42, character: 0.28 } },
   { id: "keys", name: "Keys", family: "synth", parameters: { voiceCount: 8, cutoff: 0.7, character: 0.2 } },
+  { id: "piano", name: "Piano", family: "keyboard", parameters: { voiceCount: 8, brightness: 0.55, decay: 0.7 } },
   { id: "sampler", name: "Sampler", family: "sample", parameters: { voiceCount: 8, attack: 0.01, release: 0.35 } }
 ];
 

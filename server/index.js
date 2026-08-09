@@ -25,6 +25,7 @@ const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.
 const companionPath = path.join(serverDirectory, "..", "web", "companion", "index.html");
 const companionManifestPath = path.join(serverDirectory, "..", "web", "companion", "manifest.webmanifest");
 const companionServiceWorkerPath = path.join(serverDirectory, "..", "web", "companion", "sw.js");
+const brandingDirectory = path.join(serverDirectory, "..", "branding");
 const startedAt = Date.now();
 const serverInstanceID = crypto.randomBytes(12).toString("hex");
 
@@ -598,6 +599,13 @@ const requestHandler = (request, response) => {
   if (requestPath === "/companion/sw.js") {
     const body = fs.readFileSync(companionServiceWorkerPath);
     response.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/companion/" });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/branding/musicollab-app-mark.svg" || requestPath === "/branding/musicollab-web-mark.svg" || requestPath === "/branding/musicollab-wordmark.svg") {
+    const fileName = path.basename(requestPath);
+    const body = fs.readFileSync(path.join(brandingDirectory, fileName));
+    response.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=3600" });
     response.end(body);
     return;
   }

@@ -515,6 +515,7 @@ test("loop selection carries beat-matching metadata and preserves phase", async 
 test("instrument presets normalize safely and persist in the room", async () => {
   const library = createDemoLibrary();
   assert.ok(instrumentLibrary(library).some((instrument) => instrument.id === "drums"));
+  assert.ok(instrumentLibrary(library).some((instrument) => instrument.id === "piano"));
   const preset = normalizeInstrumentSelection({ instrument: "bass", pitch: 7, parameters: { cutoff: 0.8 } }, library);
   assert.equal(preset.error, undefined);
   assert.equal(preset.value.instrumentID, "bass");
@@ -526,7 +527,10 @@ test("instrument presets normalize safely and persist in the room", async () => 
   client.socket.send(JSON.stringify({ type: "event", eventType: "instrument", payload: { instrument: "keys", pitch: -3 } }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(rooms.get("TEST").state.instrument.instrumentID, "keys");
-  assert.equal(rooms.get("TEST").state.instrument.pitch, -3);
+  client.socket.send(JSON.stringify({ type: "event", eventType: "instrument", payload: { instrument: "piano", pitch: 0 } }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(rooms.get("TEST").state.instrument.family, "keyboard");
+  assert.equal(rooms.get("TEST").state.instrument.pitch, 0);
   client.socket.send(JSON.stringify({ type: "event", eventType: "instrumentParam", payload: { instrumentID: "keys", parameter: "cutoff", value: 0.55 } }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(rooms.get("TEST").state.instrument.parameters.cutoff, 0.55);
