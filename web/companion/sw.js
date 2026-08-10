@@ -1,4 +1,4 @@
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.5';
 const CACHE = `musicollab-companion-v${APP_VERSION}`;
 const APP_SHELL = [`/companion/?v=${APP_VERSION}`, `/companion/manifest.webmanifest?v=${APP_VERSION}`];
 self.addEventListener('install', event => {

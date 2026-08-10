@@ -123,7 +123,7 @@ test("companion PWA assets advertise landscape and versioned offline behavior", 
   assert.match(webMark.response.headers.get("content-type"), /image\/svg\+xml/);
   assert.match(webMark.body, /MusiCollab web mark/);
   assert.match(worker.response.headers.get("service-worker-allowed"), /\/companion\//);
-  assert.match(worker.body, /const APP_VERSION = '0\.1\.1'/);
+  assert.match(worker.body, /const APP_VERSION = '0\.1\.5'/);
   assert.match(worker.body, /musicollab-companion-v\$\{APP_VERSION\}/);
   assert.match(worker.body, /caches\.match/);
 });
