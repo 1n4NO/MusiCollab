@@ -18,10 +18,10 @@ run_suite() {
 
 run_suite "Protocol and model tests" npm test
 run_suite "Network interruption and resumption" npm run test:network
-run_suite "Three-client smoke test" npm run test:smoke
-run_suite "Browser and PWA asset checks" npm run test:browser-assets
+run_suite "Mac + iPhone 14 smoke test" npm run test:smoke
+run_suite "Browser asset checks" npm run test:browser-assets
 echo
-echo "=== Three-client soak (${SOAK_DURATION_SECONDS}s) ==="
+echo "=== Two-client soak (${SOAK_DURATION_SECONDS}s) ==="
 (cd "$SERVER_DIR" && PORT=0 SOAK_DURATION_SECONDS="$SOAK_DURATION_SECONDS" npm run test:soak)
 
 echo

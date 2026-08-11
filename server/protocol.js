@@ -1,6 +1,6 @@
 export const PROTOCOL_VERSION = 1;
 
-export const VALID_ROLES = new Set(["composer", "performer", "companion"]);
+export const VALID_ROLES = new Set(["composer", "performer"]);
 export const VALID_EVENT_TYPES = new Set([
   "padHit",
   "noteOn",
@@ -14,9 +14,7 @@ export const VALID_EVENT_TYPES = new Set([
   "instrumentParam",
   "asset",
   "sliceMap",
-  "library",
-  "surface",
-  "rhythmGeneration"
+  "library"
 ]);
 export const VALID_QUANTIZATIONS = new Set(["immediate", "beat", "bar", "2bar"]);
 
@@ -52,7 +50,7 @@ export function validateMessage(message) {
     }
     const nameError = text(message.name, "name");
     if (nameError) return { ok: false, code: "INVALID_NAME", message: nameError };
-    if (!VALID_ROLES.has(message.role)) return { ok: false, code: "INVALID_ROLE", message: "role must be composer, performer, or companion." };
+    if (!VALID_ROLES.has(message.role)) return { ok: false, code: "INVALID_ROLE", message: "role must be composer or performer." };
     if (message.sessionToken !== undefined && (typeof message.sessionToken !== "string" || !SESSION_TOKEN_PATTERN.test(message.sessionToken))) {
       return { ok: false, code: "INVALID_SESSION_TOKEN", message: "sessionToken must be a 16–128 character opaque token." };
     }

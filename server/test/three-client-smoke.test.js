@@ -37,12 +37,11 @@ function waitFor(socket, messages, predicate) {
   });
 }
 
-test("Mac, iPhone 14, and iPhone 6 Plus complete a smoke session and recover", async () => {
+test("Mac and iPhone 14 complete a smoke session and recover", async () => {
   const composer = await connect("mac-composer", "composer");
   const performer = await connect("iphone14", "performer");
-  const companion = await connect("iphone6plus-companion", "companion");
-  const roster = await waitFor(companion.socket, companion.messages, (message) => message.type === "snapshot");
-  assert.deepEqual(new Set(roster.clients.map((client) => client.role)), new Set(["composer", "performer", "companion"]));
+  const roster = await waitFor(composer.socket, composer.messages, (message) => (message.type === "snapshot" || message.type === "roster") && message.clients.some((client) => client.role === "performer"));
+  assert.deepEqual(new Set(roster.clients.map((client) => client.role)), new Set(["composer", "performer"]));
 
   const eventID = "smoke-pad-event";
   composer.socket.send(JSON.stringify({ type: "event", eventType: "padHit", eventID, requestID: "smoke-pad-request", payload: { pad: 0, velocity: 0.8 } }));
@@ -59,7 +58,6 @@ test("Mac, iPhone 14, and iPhone 6 Plus complete a smoke session and recover", a
   assert.equal(resumedSnapshot.clients.filter((client) => client.role === "composer").length, 1);
 
   performer.socket.close();
-  companion.socket.close();
   resumedComposer.socket.close();
 });
 

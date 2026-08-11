@@ -8,21 +8,19 @@ Every server message includes `version: 1` and `type`. Client commands may inclu
 
 - `hello`: `{ room, clientID, name, role }`
 - `event`: `{ eventType, eventID?, requestID?, payload, beat?, targetServerTime?, targetBeat?, targetBar?, quantization? }`; transport payloads may use `action: "play" | "pause" | "stop"`, plus `bpm`, `beat`, `loopLengthBeats`, and `tempoPolicy: "preserve" | "reset"`
-- `surface` payloads select the companion surface: `{ target: "companion", surface: "queue" | "rhythm-generator" }`.
-- `rhythmGeneration` payloads carry local-generation state: `{ action: "start" | "preview" | "accept" | "discard", bpm, columns, pattern: { kick: number[], snare: number[], hat: number[] } }`. Audio remains local to the companion; `accept` is the handoff to the desktop sequencer.
 - `requestSnapshot`: `{ requestID? }`
 - `ping`: `{ clientTime? }`
 - `metrics`: `{ offsetMs, rttMs, jitterMs, lastSnapshotAt?, reconnectCount?, eventsSent?, eventsReceived?, eventsLost?, lastError? }`
 
-Valid roles: `composer`, `performer`, `companion`.
+Valid roles: `composer`, `performer`.
 
-Valid event types: `padHit`, `noteOn`, `trackControl`, `transport`, `queue`, `loops`, `sample`, `scene`, `instrument`, `instrumentParam`, `asset`, `sliceMap`, `library`, `surface`, `rhythmGeneration`.
+Valid event types: `padHit`, `noteOn`, `trackControl`, `transport`, `queue`, `loops`, `sample`, `scene`, `instrument`, `instrumentParam`, `asset`, `sliceMap`, `library`.
 
 Asset payloads use model version 1 and support `track`, `instrument`, `loop`, `sample`, `scene`, and `slice` records. New rooms include original generated demo content with license attribution; the room snapshot exposes all assets under `state.library`.
 
 Every asset carries an `origin` (`bundled-demo`, `user-imported`, `third-party`, or `unknown`). License metadata includes `type`, `attribution`, `distribution`, and optional `url`/`notice`. Missing license data remains `unknown`; user imports are not treated as distributable rights and should be reviewed before export or release.
 
-Sample metadata is control-plane data only. A normalized sample may include `duration`, `sampleRate`, `channels`, `sourceFormat`, `normalization`, `waveform`, `hash`, `transfer`, and validated `slices`. `transfer` is either `{ kind: "url", url, hash?, sizeBytes?, expiresAt? }` or `{ kind: "reference", reference, hash?, sizeBytes?, expiresAt? }`. Raw audio fields or bytes are rejected and are never broadcast over WebSocket. Audio transfer/download and local caching are covered by MC-077.
+Sample metadata is control-plane data only. A normalized sample may include `duration`, `sampleRate`, `channels`, `sourceFormat`, `normalization`, `waveform`, `hash`, `transfer`, and validated `slices`. `transfer` is either `{ kind: "url", url, hash?, sizeBytes?, expiresAt? }` or `{ kind: "reference", reference, hash?, sizeBytes?, expiresAt? }`. Raw audio fields or bytes are rejected and are never broadcast over WebSocket. The local session server accepts audio bytes at `POST /api/samples/upload` and stores them in `server/samples/`; it serves those files from `/samples/:fileName`, and clients publish only the resulting URL in the sample asset metadata. Uploads are limited to 100 MB.
 
 `sliceMap` payloads use `{ sampleID, sceneID?, assignments }`, where `assignments` maps pad numbers `0`–`15` to slice IDs or `null`. Reassigning a pad replaces its prior slice; sending an empty assignment map resets the map. The authoritative room snapshot exposes these records under `state.sliceMappings`.
 

@@ -122,10 +122,11 @@ test("scene actions persist, validate references, and update room order", async 
   client.socket.close();
 });
 
-test("library organization actions persist favorite, tags, and recovery state", async () => {
+test("library organization actions persist favorite, tags, recovery, and delete state", async () => {
   const library = createDemoLibrary();
   assert.deepEqual(normalizeLibraryAction({ action: "favorite", assetID: "demo-loop-bass", favorite: true }, library).value, { action: "favorite", assetID: "demo-loop-bass", favorite: true });
   assert.deepEqual(normalizeLibraryAction({ action: "tags", assetID: "demo-loop-bass", tags: [" Groove ", "groove"] }, library).value.tags, ["groove"]);
+  assert.deepEqual(normalizeLibraryAction({ action: "delete", assetID: "demo-sample-chops" }, library).value, { action: "delete", assetID: "demo-sample-chops", type: "sample" });
   assert.match(normalizeLibraryAction({ action: "favorite", assetID: "missing", favorite: true }, library).error, /room library/);
   const client = await connect("library-actions", "composer", "LIBRARY_TEST");
   const sendLibrary = (payload) => client.socket.send(JSON.stringify({ type: "event", eventType: "library", payload }));
@@ -142,6 +143,9 @@ test("library organization actions persist favorite, tags, and recovery state", 
   sendLibrary({ action: "recover", assetID: "demo-sample-chops" });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(sample.missing, false);
+  sendLibrary({ action: "delete", assetID: "demo-sample-chops" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(room.state.library.samples.some((asset) => asset.id === "demo-sample-chops"), false);
   client.socket.close();
 });
 
@@ -149,7 +153,7 @@ test("session tokens resume identity without duplicate roster entries", async ()
   const first = await connect("resumable-client", "composer", "RESUME_TEST");
   const welcome = first.messages.find((message) => message.type === "welcome");
   assert.ok(welcome?.sessionToken);
-  const peer = await connect("resumable-peer", "companion", "RESUME_TEST");
+  const peer = await connect("resumable-peer", "performer", "RESUME_TEST");
   first.socket.close();
   await new Promise((resolve) => setTimeout(resolve, 20));
   const resumed = await connect("different-local-id", "composer", "RESUME_TEST", welcome.sessionToken);
@@ -214,7 +218,7 @@ test("rejects invalid roles and malformed events", async () => {
   socket.send(JSON.stringify({ type: "hello", room: "TEST", clientID: "bad-role", role: "admin", name: "Bad" }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(messages[0].code, "INVALID_ROLE");
-  socket.send(JSON.stringify({ type: "hello", room: "TEST", clientID: "valid-client", role: "companion", name: "Valid" }));
+  socket.send(JSON.stringify({ type: "hello", room: "TEST", clientID: "valid-client", role: "performer", name: "Valid" }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   socket.send(JSON.stringify({ type: "event", eventType: "not-real", payload: {} }));
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -299,7 +303,7 @@ test("events carry normalized future-target timing metadata", async () => {
 });
 
 test("quantized queue changes remain pending until their target", async () => {
-  const client = await connect("queue-scheduler", "companion", "QUEUE_TEST");
+  const client = await connect("queue-scheduler", "composer", "QUEUE_TEST");
   const targetServerTime = Date.now() + 50;
   client.socket.send(JSON.stringify({
     type: "event",
@@ -376,7 +380,7 @@ test("heartbeat tolerates two missed checks and terminates on the third", () => 
 });
 
 test("ping returns timing fields for clock synchronization", async () => {
-  const client = await connect("clock-test", "companion");
+  const client = await connect("clock-test", "performer");
   client.socket.send(JSON.stringify({ type: "ping", clientTime: 123456789 }));
   const pong = await new Promise((resolve) => {
     const handler = (raw) => {
@@ -412,11 +416,10 @@ test("server info exposes release metadata without session data", async () => {
   assert.equal(Object.hasOwn(info, "sessionToken"), false);
 });
 
-test("three-client clock simulation stays converged during playback", async () => {
+test("two-client clock simulation stays converged during playback", async () => {
   const clients = await Promise.all([
     connect("accuracy-composer", "composer"),
-    connect("accuracy-performer", "performer"),
-    connect("accuracy-companion", "companion")
+    connect("accuracy-performer", "performer")
   ]);
   clients[0].socket.send(JSON.stringify({ type: "event", eventType: "transport", payload: { action: "play", bpm: 120 } }));
   await new Promise((resolve) => setTimeout(resolve, 650));

@@ -12,12 +12,13 @@ async function get(path) {
   return { response, body: await response.text() };
 }
 
-test("composer and companion routes serve usable HTML shells", async () => {
+test("composer and sequencer routes serve usable HTML shells", async () => {
   const composer = await get("/composer");
   const sequencer = await get("/sequencer");
-  const companion = await get("/companion/");
+  const sampleEditor = await get("/sample-editor");
   assert.equal(composer.response.status, 200);
   assert.equal(sequencer.response.status, 200);
+  assert.equal(sampleEditor.response.status, 200);
   assert.match(sequencer.body, /MusiCollab Composer/);
   assert.match(sequencer.body, /vendor\/zustand\/vanilla\.mjs/);
   const zustand = await get("/vendor/zustand/vanilla.mjs");
@@ -80,52 +81,32 @@ test("composer and companion routes serve usable HTML shells", async () => {
   assert.match(composer.body, /function renderClients\(list\)/);
   assert.match(composer.body, /Waiting for clients/);
   assert.match(composer.body, /id="stop"/);
+  assert.match(composer.body, /id='floatingRecord'/);
+  assert.match(sampleEditor.body, /sampleEditorTab/);
+  assert.match(sampleEditor.body, /samplePreviewEdited/);
+  assert.match(sampleEditor.body, /sampleLibrarySearch/);
+  assert.match(sampleEditor.body, /sampleImportPanel/);
+  assert.match(sampleEditor.body, /connectSampleModulation/);
+  assert.match(sampleEditor.body, /sampleModTarget/);
   assert.match(composer.body, /id="minus"/);
   assert.match(composer.body, /id="plus"/);
   assert.match(composer.body, /function renderClockQuality\(message\)/);
   assert.match(composer.body, /message\.type==='error'/);
   assert.match(composer.body, /connection closed — retrying/);
-  assert.equal(companion.response.status, 200);
-  assert.match(companion.body, /MusiCollab Companion/);
-  assert.match(companion.body, /manifest\.webmanifest/);
-  assert.match(companion.body, /APPLY TO iPHONE 14/);
-  assert.match(companion.body, /location\.protocol==='https:'\?'wss':'ws'/);
-  assert.match(companion.body, /id="queueList"/);
-  assert.match(companion.body, /data-action="up"/);
-  assert.match(companion.body, /id="pitch"/);
-  assert.match(companion.body, /min="-24" max="24"/);
-  assert.match(companion.body, /value="piano"/);
-  assert.match(companion.body, /value="pad"/);
-  assert.match(companion.body, /id="roomInput"/);
-  assert.match(companion.body, /id="joinRoom"/);
-  assert.match(companion.body, /id="sliceList"/);
-  assert.match(companion.body, /data-transport="play"/);
-  assert.match(companion.body, /id="sceneSelect"/);
-  assert.match(companion.body, /musicollab\.companion\.queue/);
-  assert.match(companion.body, /musicollab\.companion\.sample/);
-  assert.match(companion.body, /connectionState='reconnecting'/);
-  assert.match(companion.body, /function renderSample\(sample\)/);
-  assert.match(companion.body, /orientationNotice/);
-  assert.match(companion.body, /@media\(orientation:portrait\)/);
-  assert.match(companion.body, /:focus-visible/);
+  assert.match(composer.body, /api\/samples\/upload/);
 });
 
-test("companion PWA assets advertise landscape and versioned offline behavior", async () => {
+test("the retired companion PWA is no longer served", async () => {
+  const companion = await get("/companion/");
   const manifest = await get("/companion/manifest.webmanifest");
   const worker = await get("/companion/sw.js");
   const webMark = await get("/branding/musicollab-web-mark.svg");
-  assert.equal(manifest.response.status, 200);
-  assert.match(manifest.response.headers.get("content-type"), /manifest\+json/);
-  assert.match(manifest.body, /"orientation": "landscape"/);
-  assert.match(manifest.body, /"start_url": "\/companion\//);
-  assert.equal(worker.response.status, 200);
+  assert.equal(companion.response.status, 404);
+  assert.equal(manifest.response.status, 404);
+  assert.equal(worker.response.status, 404);
   assert.equal(webMark.response.status, 200);
   assert.match(webMark.response.headers.get("content-type"), /image\/svg\+xml/);
   assert.match(webMark.body, /MusiCollab web mark/);
-  assert.match(worker.response.headers.get("service-worker-allowed"), /\/companion\//);
-  assert.match(worker.body, /const APP_VERSION = '0\.1\.5'/);
-  assert.match(worker.body, /musicollab-companion-v\$\{APP_VERSION\}/);
-  assert.match(worker.body, /caches\.match/);
 });
 
 test("static error and health responses remain browser-readable", async () => {

@@ -114,7 +114,8 @@ export function normalizeLibraryAction(input, library) {
     return { value: { action, assetID: asset.id, missing: input.missing } };
   }
   if (action === "recover") return { value: { action, assetID: asset.id, missing: false } };
-  return { error: "library.action must be favorite, tags, missing, or recover." };
+  if (action === "delete") return { value: { action, assetID: asset.id, type: asset.type } };
+  return { error: "library.action must be favorite, tags, missing, recover, or delete." };
 }
 
 export function normalizeSceneAction(input, library) {

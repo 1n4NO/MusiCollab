@@ -22,15 +22,26 @@ if (TLS_ENABLED && (!TLS_KEY_PATH || !TLS_CERT_PATH)) {
 const APP_VERSION = "0.1.0";
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const composerPath = path.join(serverDirectory, "..", "web", "composer", "index.html");
-const companionPath = path.join(serverDirectory, "..", "web", "companion", "index.html");
-const companionManifestPath = path.join(serverDirectory, "..", "web", "companion", "manifest.webmanifest");
-const companionServiceWorkerPath = path.join(serverDirectory, "..", "web", "companion", "sw.js");
 const zustandVanillaPath = path.join(serverDirectory, "node_modules", "zustand", "esm", "vanilla.mjs");
 const brandingDirectory = path.join(serverDirectory, "..", "branding");
+const samplesDirectory = path.join(serverDirectory, "samples");
+const MAX_SAMPLE_UPLOAD_BYTES = 100 * 1024 * 1024;
+fs.mkdirSync(samplesDirectory, { recursive: true });
 const startedAt = Date.now();
 const serverInstanceID = crypto.randomBytes(12).toString("hex");
 
 const rooms = new Map();
+
+function sampleFileName(originalName = "sample.audio") {
+  const extension = path.extname(String(originalName)).toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 8) || ".audio";
+  return `${Date.now()}-${crypto.randomUUID()}${extension}`;
+}
+
+function jsonResponse(response, status, value) {
+  const body = JSON.stringify(value);
+  response.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+  response.end(body);
+}
 
 const MIN_BPM = 60;
 const MAX_BPM = 180;
@@ -153,7 +164,6 @@ function createRoom(roomID) {
     clockTime: performance.now(),
     state: {
       transport: transportSnapshot({ playing: false, bpm: 118, beat: 0, loopLengthBeats: DEFAULT_LOOP_LENGTH_BEATS }),
-      surface: { companion: "queue" },
       queue: [],
       loops: [],
       instrument: { instrumentID: "drums", instrument: "drums", name: "Drums", family: "percussion", engine: "abstract", parameters: { voiceCount: 8, character: 0.35 }, pitch: 0 },
@@ -255,8 +265,14 @@ function applySceneAction(room, action) {
 }
 
 function applyLibraryAction(room, action) {
-  const asset = ["tracks", "instruments", "loops", "samples", "scenes", "slices"].flatMap((collection) => room.state.library[collection] || []).find((item) => item.id === action.assetID);
+  const collections = ["tracks", "instruments", "loops", "samples", "scenes", "slices"];
+  const asset = collections.flatMap((collection) => room.state.library[collection] || []).find((item) => item.id === action.assetID);
   if (!asset) return;
+  if (action.action === "delete") {
+    const collection = `${asset.type}s`;
+    room.state.library[collection] = (room.state.library[collection] || []).filter((item) => item.id !== action.assetID);
+    return;
+  }
   if (action.action === "favorite") asset.favorite = action.favorite;
   if (action.action === "tags") asset.tags = action.tags;
   if (action.action === "missing" || action.action === "recover") asset.missing = action.missing;
@@ -378,14 +394,6 @@ function applyEvent(room, client, input) {
     }
     event.payload = result.value;
     room.state.tracks[result.value.trackID] = result.value;
-  }
-  if (eventType === "surface") {
-    if (payload.target !== "companion" || !["queue", "rhythm-generator"].includes(payload.surface)) {
-      send(client.socket, errorMessage("INVALID_SURFACE", "surface must target companion and select queue or rhythm-generator.", input.requestID ?? null));
-      return;
-    }
-    event.payload = { target: "companion", surface: payload.surface };
-    room.state.surface.companion = payload.surface;
   }
   if (eventType === "scene") {
     const result = normalizeSceneAction(payload, room.state.library);
@@ -587,40 +595,88 @@ function lanAddress() {
 }
 
 const requestHandler = (request, response) => {
-  const requestPath = new URL(request.url, "http://localhost").pathname;
+  const requestURL = new URL(request.url, "http://localhost");
+  const requestPath = requestURL.pathname;
+  if (requestPath === "/api/samples/upload" && request.method === "POST") {
+    const chunks = [];
+    let total = 0;
+    let rejected = false;
+    request.on("data", (chunk) => {
+      total += chunk.length;
+      if (total > MAX_SAMPLE_UPLOAD_BYTES) {
+        rejected = true;
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      if (rejected) return jsonResponse(response, 413, { error: "Sample upload exceeds the 100 MB limit." });
+      if (!total) return jsonResponse(response, 400, { error: "Sample upload is empty." });
+      const fileName = sampleFileName(requestURL.searchParams.get("name") || "sample.audio");
+      const destination = path.join(samplesDirectory, fileName);
+      try {
+        fs.writeFileSync(destination, Buffer.concat(chunks));
+        const scheme = TLS_ENABLED ? "https" : "http";
+        const host = request.headers.host || `127.0.0.1:${PORT}`;
+        return jsonResponse(response, 201, { fileName, sizeBytes: total, url: `${scheme}://${host}/samples/${fileName}` });
+      } catch (error) {
+        return jsonResponse(response, 500, { error: `Could not store sample: ${error.message}` });
+      }
+    });
+    return;
+  }
+  if (requestPath.startsWith("/samples/") && request.method === "DELETE") {
+    const fileName = path.basename(requestPath.slice("/samples/".length));
+    const filePath = path.join(samplesDirectory, fileName);
+    if (!fileName || fileName !== requestPath.slice("/samples/".length) || !fs.existsSync(filePath)) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("Sample not found\n");
+      return;
+    }
+    try {
+      fs.unlinkSync(filePath);
+      response.writeHead(204);
+      response.end();
+    } catch (error) {
+      jsonResponse(response, 500, { error: `Could not delete sample: ${error.message}` });
+    }
+    return;
+  }
+  if (requestPath.startsWith("/samples/") && request.method === "GET") {
+    const fileName = path.basename(requestPath.slice("/samples/".length));
+    const filePath = path.join(samplesDirectory, fileName);
+    if (!fileName || fileName !== requestPath.slice("/samples/".length) || !fs.existsSync(filePath)) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("Sample not found\n");
+      return;
+    }
+    const extension = path.extname(fileName).toLowerCase();
+    const contentType = extension === ".wav" ? "audio/wav" : extension === ".m4a" ? "audio/mp4" : extension === ".mp3" ? "audio/mpeg" : "application/octet-stream";
+    response.writeHead(200, { "content-type": contentType, "cache-control": "no-cache" });
+    fs.createReadStream(filePath).pipe(response);
+    return;
+  }
   if (requestPath === "/composer" || requestPath === "/composer/") {
     const body = fs.readFileSync(composerPath);
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-length": body.length });
     response.end(body);
     return;
   }
   if (requestPath === "/sequencer" || requestPath === "/sequencer/") {
     const body = fs.readFileSync(composerPath);
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-length": body.length });
+    response.end(body);
+    return;
+  }
+  if (requestPath === "/sample-editor" || requestPath === "/sample-editor/") {
+    const body = fs.readFileSync(composerPath);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-length": body.length });
     response.end(body);
     return;
   }
   if (requestPath === "/vendor/zustand/vanilla.mjs") {
     const body = fs.readFileSync(zustandVanillaPath);
     response.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "public, max-age=3600" });
-    response.end(body);
-    return;
-  }
-  if (requestPath === "/companion" || requestPath === "/companion/") {
-    const body = fs.readFileSync(companionPath);
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-length": body.length });
-    response.end(body);
-    return;
-  }
-  if (requestPath === "/companion/manifest.webmanifest") {
-    const body = fs.readFileSync(companionManifestPath);
-    response.writeHead(200, { "content-type": "application/manifest+json; charset=utf-8", "cache-control": "no-cache" });
-    response.end(body);
-    return;
-  }
-  if (requestPath === "/companion/sw.js") {
-    const body = fs.readFileSync(companionServiceWorkerPath);
-    response.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/companion/" });
     response.end(body);
     return;
   }

@@ -10,7 +10,7 @@ This document is the source of truth for the iOS app's local development signing
 | Bundle ID | `com.example.MusiCollab` | Replace with a unique reverse-DNS ID before distribution |
 | Development team | `L4Q834S9XV` | Must belong to the Apple ID signed into Xcode |
 | Signing style | Automatic | Xcode manages development provisioning for connected devices |
-| Minimum iOS | 12.0 | iPhone 6 Plus is not supported by current iOS versions; the web companion remains its supported path |
+| Minimum iOS | 16.0 | Native performer support starts with iPhone 14-class devices |
 | Marketing version | `0.1.0` | User-visible version; increment for product releases |
 | Build number | `1` | Increment for every archive uploaded to Apple |
 | Device family | iPhone | The native performer is landscape-only |

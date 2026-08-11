@@ -22,8 +22,8 @@ function connect(clientID) {
   });
 }
 
-test(`three-client soak remains stable for ${durationSeconds}s`, async () => {
-  const clients = await Promise.all([connect("composer"), connect("performer"), connect("companion")]);
+test(`two-client soak remains stable for ${durationSeconds}s`, async () => {
+  const clients = await Promise.all([connect("composer"), connect("performer")]);
   let receivedEvents = 0;
   let disconnects = 0;
   const listeners = clients.map((socket) => {

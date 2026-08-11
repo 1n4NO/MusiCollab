@@ -64,7 +64,7 @@ start_server() {
     exit 1
   fi
   echo "Composer:  $scheme://127.0.0.1:$PORT/composer"
-  echo "Companion: $scheme://$(lan_ip):$PORT/companion"
+  echo "Sequencer: $scheme://127.0.0.1:$PORT/sequencer"
   echo "WebSocket: $socket_scheme://$(lan_ip):$PORT/ws"
   echo "Log:       $LOG_FILE"
 }

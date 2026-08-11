@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 final class RootViewController: UIViewController {
     private let audio = AudioEngine()
@@ -21,6 +22,18 @@ final class RootViewController: UIViewController {
     private var activePadTouches = Set<Int>()
     private var warmedPads = Set<Int>()
     private var importedSample: ImportedSample?
+    private var sampleRecorder: AVAudioRecorder?
+    private var sampleRecordingURL: URL?
+    private var uploadedSampleURLs: [String: String] = [:]
+    private var recordSampleButton: UIButton!
+    private var previewSampleButton: UIButton!
+    private var syncSampleButton: UIButton!
+    private var deleteSampleButton: UIButton!
+    private var syncAllSampleButton: UIButton!
+    private var sampleListStack: UIStackView!
+    private var samplePlayer: AVAudioPlayer?
+    private var pendingSampleSlices: [ClosedRange<Double>] = []
+    private var publishedSampleIDs: [String: String] = [:]
     private var sessionTransport: SessionTransport?
     private var receivedEventIDs = Set<String>()
     private var scheduledRemoteEvents: [String: DispatchWorkItem] = [:]
@@ -235,7 +248,7 @@ final class RootViewController: UIViewController {
             let button = makeButton(title: instrument.uppercased(), color: instrument == keyboardInstrument ? violet : .white)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 10, weight: .bold)
             button.tag = pianoInstrumentButtons.count
-            button.accessibilityLabel = "Select (instrument) instrument"
+            button.accessibilityLabel = "Select \(instrument) instrument"
             button.addTarget(self, action: #selector(selectKeyboardInstrument(_:)), for: .touchUpInside)
             instrumentPicker.addArrangedSubview(button)
             pianoInstrumentButtons.append(button)
@@ -305,17 +318,47 @@ final class RootViewController: UIViewController {
         sampleTitleLabel.text = "No sample loaded"
         sampleTitleLabel.textColor = .white
         sampleTitleLabel.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        sampleListStack = UIStackView()
+        sampleListStack.axis = .vertical
+        sampleListStack.spacing = 6
+        sampleListStack.isLayoutMarginsRelativeArrangement = true
+        sampleListStack.layoutMargins = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        sampleListStack.backgroundColor = bg
+        sampleListStack.layer.cornerRadius = 8
         let importButton = makeButton(title: "IMPORT SAMPLE", color: violet)
         importButton.addTarget(self, action: #selector(importSample), for: .touchUpInside)
         let sliceButton = makeButton(title: "SLICE INTO 8", color: cyan)
         sliceButton.addTarget(self, action: #selector(sliceSample), for: .touchUpInside)
+        previewSampleButton = makeButton(title: "▶ PREVIEW SAMPLE", color: .white)
+        previewSampleButton.addTarget(self, action: #selector(toggleSamplePreview), for: .touchUpInside)
+        previewSampleButton.isEnabled = false
+        syncSampleButton = makeButton(title: "SYNC TO DESKTOP", color: cyan)
+        syncSampleButton.addTarget(self, action: #selector(syncCurrentSample), for: .touchUpInside)
+        syncSampleButton.isEnabled = false
+        deleteSampleButton = makeButton(title: "DELETE SAMPLE", color: coral)
+        deleteSampleButton.addTarget(self, action: #selector(deleteCurrentSample), for: .touchUpInside)
+        deleteSampleButton.isEnabled = false
+        syncAllSampleButton = makeButton(title: "SYNC ALL", color: cyan)
+        syncAllSampleButton.addTarget(self, action: #selector(syncAllSamples), for: .touchUpInside)
+        syncAllSampleButton.isEnabled = false
+        recordSampleButton = makeButton(title: "● RECORD SAMPLE", color: coral)
+        recordSampleButton.addTarget(self, action: #selector(toggleSampleRecording), for: .touchUpInside)
         sampleStack.addArrangedSubview(sampleTitleLabel)
+        sampleStack.addArrangedSubview(sampleListStack)
+        sampleStack.addArrangedSubview(syncAllSampleButton)
         sampleStack.addArrangedSubview(makeWaveform())
-        let actions = UIStackView(arrangedSubviews: [importButton, sliceButton])
-        actions.axis = .horizontal
+        let firstActionRow = UIStackView(arrangedSubviews: [importButton, previewSampleButton, sliceButton])
+        let secondActionRow = UIStackView(arrangedSubviews: [recordSampleButton, syncSampleButton, deleteSampleButton])
+        [firstActionRow, secondActionRow].forEach {
+            $0.axis = .horizontal
+            $0.spacing = 8
+            $0.distribution = .fillEqually
+        }
+        let actions = UIStackView(arrangedSubviews: [firstActionRow, secondActionRow])
+        actions.axis = .vertical
         actions.spacing = 8
-        actions.distribution = .fillEqually
         sampleStack.addArrangedSubview(actions)
+        refreshSampleList()
         sample.addSubview(sampleStack)
         sampleStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -671,7 +714,7 @@ final class RootViewController: UIViewController {
         button.backgroundColor = panel
         button.layer.cornerRadius = 8
         button.heightAnchor.constraint(equalToConstant: 72).isActive = true
-        button.accessibilityLabel = "Piano key (title)"
+        button.accessibilityLabel = "Piano key \(title)"
         button.accessibilityValue = "Ready"
         return button
     }
@@ -712,7 +755,7 @@ final class RootViewController: UIViewController {
         pianoInstrumentButtons.enumerated().forEach { index, button in
             button.setTitleColor(index == sender.tag ? violet : .white, for: .normal)
         }
-        performanceModeLabel.text = "Keyboard instrument  /  (keyboardInstrument.uppercased())"
+        performanceModeLabel.text = "Keyboard instrument  /  \(keyboardInstrument.uppercased())"
         sessionTransport?.send(eventType: "instrument", payload: ["instrument": keyboardInstrument, "pitch": 0])
     }
 
@@ -748,10 +791,142 @@ final class RootViewController: UIViewController {
         }
     }
 
+    private func refreshSampleList() {
+        guard let sampleListStack else { return }
+        sampleListStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if samples.importedSamples.isEmpty {
+            let empty = UILabel()
+            empty.text = "No recordings yet  /  RECORD SAMPLE to capture offline"
+            empty.textColor = .lightGray
+            empty.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+            sampleListStack.addArrangedSubview(empty)
+        } else {
+            samples.importedSamples.enumerated().forEach { index, sample in
+                let row = UIStackView()
+                row.axis = .horizontal
+                row.spacing = 8
+                let select = makeButton(title: "\(index + 1)  \(sample.url.lastPathComponent)  /  \(formatDuration(sample.duration))", color: sample.url == importedSample?.url ? cyan : .white)
+                select.contentHorizontalAlignment = .left
+                select.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
+                select.addAction(UIAction { [weak self] _ in self?.selectSample(sample) }, for: .touchUpInside)
+                let state = UILabel()
+                state.text = publishedSampleIDs[sample.url.path] == nil ? "PENDING" : "SYNCED"
+                state.textColor = publishedSampleIDs[sample.url.path] == nil ? .lightGray : cyan
+                state.font = UIFont.systemFont(ofSize: 10, weight: .bold)
+                row.addArrangedSubview(select)
+                row.addArrangedSubview(state)
+                sampleListStack.addArrangedSubview(row)
+            }
+        }
+        syncAllSampleButton?.isEnabled = !samples.importedSamples.isEmpty
+    }
+
+    private func selectSample(_ sample: ImportedSample) {
+        samplePlayer?.stop()
+        samplePlayer = nil
+        importedSample = sample
+        pendingSampleSlices = []
+        previewSampleButton.isEnabled = true
+        syncSampleButton.isEnabled = true
+        deleteSampleButton.isEnabled = true
+        sampleTitleLabel.text = "Selected (sample.url.lastPathComponent)  /  (formatDuration(sample.duration))"
+        refreshSampleList()
+    }
+
+    @objc private func syncAllSamples() {
+        guard !samples.importedSamples.isEmpty else { return }
+        sampleTitleLabel.text = "Syncing (samples.importedSamples.count) samples…"
+        samples.importedSamples.forEach { publishSample($0, slices: $0.url == importedSample?.url ? pendingSampleSlices : []) }
+    }
+
+    @objc private func toggleSamplePreview() {
+        guard let sample = importedSample else {
+            sampleTitleLabel.text = "Import or record a sample first"
+            return
+        }
+        if let player = samplePlayer, player.isPlaying {
+            player.stop()
+            previewSampleButton.setTitle("▶ PREVIEW SAMPLE", for: .normal)
+            return
+        }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try AVAudioSession.sharedInstance().setActive(true)
+            samplePlayer = try AVAudioPlayer(contentsOf: sample.url)
+            samplePlayer?.delegate = self
+            samplePlayer?.prepareToPlay()
+            samplePlayer?.play()
+            previewSampleButton.setTitle("■ STOP PREVIEW", for: .normal)
+            sampleTitleLabel.text = "Previewing \(sample.url.lastPathComponent)  /  \(formatDuration(sample.duration))"
+        } catch {
+            sampleTitleLabel.text = "Preview unavailable  /  \(error.localizedDescription)"
+        }
+    }
+
+    @objc private func toggleSampleRecording() {
+        if sampleRecorder != nil {
+            sampleRecorder?.stop()
+            return
+        }
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try audioSession.setActive(true)
+            let url = try samples.recordingURL()
+            let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44_100, AVNumberOfChannelsKey: 1, AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue]
+            let recorder = try AVAudioRecorder(url: url, settings: settings)
+            recorder.delegate = self
+            recorder.record()
+            sampleRecorder = recorder
+            sampleRecordingURL = url
+            recordSampleButton.setTitle("■ STOP RECORDING", for: .normal)
+            sampleTitleLabel.text = "Recording from iPhone microphone…"
+        } catch {
+            sampleTitleLabel.text = "Recording unavailable  /  \(error.localizedDescription)"
+        }
+    }
+
     @objc private func importSample() {
         let picker = UIDocumentPickerViewController(documentTypes: ["public.audio"], in: .import)
         picker.delegate = self
         present(picker, animated: true)
+    }
+
+    @objc private func syncCurrentSample() {
+        guard let sample = importedSample else {
+            sampleTitleLabel.text = "Import or record a sample first"
+            return
+        }
+        sampleTitleLabel.text = "Syncing \(sample.url.lastPathComponent)…"
+        publishSample(sample, slices: pendingSampleSlices)
+    }
+
+    @objc private func deleteCurrentSample() {
+        samplePlayer?.stop()
+        samplePlayer = nil
+        previewSampleButton.setTitle("▶ PREVIEW SAMPLE", for: .normal)
+
+        if let sample = importedSample {
+            let cacheKey = sample.url.path
+            if let uploadedURL = uploadedSampleURLs.removeValue(forKey: cacheKey), let url = URL(string: uploadedURL) {
+                var request = URLRequest(url: url)
+                request.httpMethod = "DELETE"
+                URLSession.shared.dataTask(with: request).resume()
+            }
+        }
+        if let sample = importedSample, let publishedSampleID = publishedSampleIDs.removeValue(forKey: sample.url.path) {
+            sessionTransport?.send(eventType: "library", payload: ["action": "delete", "assetID": publishedSampleID])
+        }
+        if let sample = importedSample {
+            samples.remove(sample)
+        }
+        importedSample = nil
+        pendingSampleSlices = []
+        previewSampleButton.isEnabled = false
+        syncSampleButton.isEnabled = false
+        deleteSampleButton.isEnabled = false
+        sampleTitleLabel.text = "No sample selected"
+        refreshSampleList()
     }
 
     @objc private func sliceSample() {
@@ -760,8 +935,41 @@ final class RootViewController: UIViewController {
             return
         }
         let slices = samples.sliceBoundaries(for: sample, count: 8)
+        pendingSampleSlices = slices
+        syncSampleButton.isEnabled = true
+        deleteSampleButton.isEnabled = true
         sampleTitleLabel.text = "\(slices.count) slices ready  /  \(formatDuration(sample.duration))"
-        publishSample(sample, slices: slices)
+    }
+}
+
+extension RootViewController: AVAudioRecorderDelegate, AVAudioPlayerDelegate {
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        let url = sampleRecordingURL
+        sampleRecorder = nil
+        sampleRecordingURL = nil
+        recordSampleButton.setTitle("● RECORD SAMPLE", for: .normal)
+        guard flag, let url, let sample = samples.importSample(from: url) else {
+            sampleTitleLabel.text = "Recording failed"
+            return
+        }
+        importedSample = sample
+        previewSampleButton.isEnabled = true
+        syncSampleButton.isEnabled = true
+        deleteSampleButton.isEnabled = true
+        pendingSampleSlices = []
+        sampleTitleLabel.text = "\(url.lastPathComponent)  /  ready to preview or sync"
+        refreshSampleList()
+    }
+
+    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        sampleRecorder = nil
+        sampleRecordingURL = nil
+        recordSampleButton.setTitle("● RECORD SAMPLE", for: .normal)
+        sampleTitleLabel.text = "Recording failed  /  \(error?.localizedDescription ?? "encoder error")"
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        previewSampleButton.setTitle("▶ PREVIEW SAMPLE", for: .normal)
     }
 }
 
@@ -769,8 +977,12 @@ extension RootViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentAt url: URL) {
         importedSample = samples.importSample(from: url)
         if let sample = importedSample {
+            previewSampleButton.isEnabled = true
+            syncSampleButton.isEnabled = true
+            deleteSampleButton.isEnabled = true
+            pendingSampleSlices = []
             sampleTitleLabel.text = "\(sample.url.lastPathComponent)  /  \(formatDuration(sample.duration))"
-            publishSample(sample, slices: [])
+            refreshSampleList()
         } else {
             sampleTitleLabel.text = "Unsupported audio file"
         }
@@ -778,13 +990,45 @@ extension RootViewController: UIDocumentPickerDelegate {
 
     private func publishSample(_ sample: ImportedSample, slices: [ClosedRange<Double>]) {
         let boundaries = slices.map { ["start": $0.lowerBound, "end": $0.upperBound] }
-        sessionTransport?.send(eventType: "sample", payload: [
-            "name": sample.url.lastPathComponent,
-            "duration": sample.duration,
-            "sampleRate": sample.sampleRate,
-            "channels": sample.channelCount,
-            "slices": boundaries
-        ])
+        let cacheKey = sample.url.path
+        let publishedSampleID = publishedSampleIDs[cacheKey] ?? UUID().uuidString
+        publishedSampleIDs[cacheKey] = publishedSampleID
+        var payload: [String: Any] = ["id": publishedSampleID, "type": "sample", "name": sample.url.lastPathComponent, "origin": "user-imported", "duration": sample.duration, "sampleRate": sample.sampleRate, "channels": sample.channelCount, "slices": boundaries]
+        if let uploadedURL = uploadedSampleURLs[cacheKey] {
+            payload["transfer"] = ["kind": "url", "url": uploadedURL]
+            sessionTransport?.send(eventType: "sample", payload: payload)
+            return
+        }
+        guard let serverURL = sampleUploadURL(name: sample.url.lastPathComponent) else {
+            sampleTitleLabel.text = "Sample sync unavailable  /  server URL missing"
+            return
+        }
+        var request = URLRequest(url: serverURL)
+        request.httpMethod = "POST"
+        request.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
+        URLSession.shared.uploadTask(with: request, fromFile: sample.url) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard error == nil, let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), let data,
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let uploadedURL = object["url"] as? String else {
+                    self.sampleTitleLabel.text = "Sample recorded, but sync failed  /  retry when connected"
+                    return
+                }
+                self.uploadedSampleURLs[cacheKey] = uploadedURL
+                payload["transfer"] = ["kind": "url", "url": uploadedURL]
+                self.sessionTransport?.send(eventType: "sample", payload: payload)
+                self.sampleTitleLabel.text = "\(sample.url.lastPathComponent)  /  synced to desktop sample folder"
+            }
+        }.resume()
+    }
+
+    private func sampleUploadURL(name: String) -> URL? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "MusiCollabServerURL") as? String,
+              var components = URLComponents(string: value) else { return nil }
+        components.scheme = components.scheme == "wss" ? "https" : "http"
+        components.path = "/api/samples/upload"
+        components.queryItems = [URLQueryItem(name: "name", value: name)]
+        return components.url
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

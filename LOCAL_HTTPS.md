@@ -1,6 +1,6 @@
 # Local HTTPS development
 
-HTTP remains the default for the Mac LAN workflow. Use local HTTPS when testing PWA installation, secure-context behavior, or a WSS path. TLS is opt-in and requires both certificate files.
+HTTP remains the default for the Mac LAN workflow. Use local HTTPS when testing secure-context behavior or a WSS path. TLS is opt-in and requires both certificate files.
 
 ## Create a trusted development certificate
 
@@ -29,7 +29,7 @@ MUSICOLLAB_TLS_CERT=/Users/ps/dev/MusiCollab/.local-certs/musicollab.pem \
 ./scripts/musicollab-server.sh restart
 ```
 
-The controller prints `https://` and `wss://` URLs when TLS is enabled. Its health check uses `curl --insecure` only for the loopback probe; the browser/device must still trust the certificate for a secure PWA context.
+The controller prints `https://` and `wss://` URLs when TLS is enabled. Its health check uses `curl --insecure` only for the loopback probe; the browser and native app must still trust the certificate.
 
 Return to normal HTTP development with:
 

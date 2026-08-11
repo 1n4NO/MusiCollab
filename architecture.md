@@ -3,15 +3,15 @@
 ## Runtime topology
 
 ```text
-Mac browser: Composer Deck
+Mac browser: Composer Deck / Sequencer
         │
         │ WebSocket / JSON events
         ▼
 Mac Node session server: room, clock, state, relay
-        ▲                         ▲
-        │                         │
-Native iPhone 14 app       iPhone 6 Plus Safari companion
-low-latency instruments    queue, waveform, arrangement controls
+        ▲
+        │
+Native iPhone 14 app
+low-latency instruments
 ```
 
 ## Responsibilities
@@ -30,17 +30,9 @@ low-latency instruments    queue, waveform, arrangement controls
 - Send timestamped musical events to the server.
 - Schedule remote events slightly ahead of their target beat.
 
-### iPhone 6 Plus web companion
-
-- Queue tracks and scenes.
-- Browse sample metadata.
-- Display waveform and slice boundaries.
-- Send non-critical arrangement and transport commands.
-- Avoid real-time performance responsibilities.
-
 ### Mac session server
 
-- Accept WebSocket connections from all clients.
+- Accept WebSocket connections from the Mac composer and iPhone 14 performer.
 - Assign a room/session ID and client role.
 - Maintain authoritative session state and sequence numbers.
 - Relay events and periodic state snapshots.
